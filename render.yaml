@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: oplaty-mieszkaniowe
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: oplaty-db
+          property: connectionString
+databases:
+  - name: oplaty-db
