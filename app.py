@@ -42,7 +42,7 @@ def db_execute(con, sql, params=()):
     # Convert a small subset of SQLite placeholders to PostgreSQL placeholders.
     if os.environ.get("DATABASE_URL", "").strip():
         sql = sql.replace("?", "%s")
-    return db_execute(con,sql, params)
+    return con.execute(sql, params)
 
 def db_script_init(con):
     if os.environ.get("DATABASE_URL", "").strip():
