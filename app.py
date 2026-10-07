@@ -192,6 +192,18 @@ def edit_apartment(apartment_id):
     return render_template('apartment_form.html', apartment=apartment)
 
 
+@app.post('/apartment/<int:apartment_id>/delete')
+def delete_apartment(apartment_id):
+    con = get_db()
+    apartment = get_apartment(con, apartment_id)
+    if apartment:
+        # Sekcje i odczyty zostaną usunięte przez ON DELETE CASCADE.
+        db_execute(con, 'DELETE FROM apartments WHERE id=?', (apartment_id,))
+        con.commit()
+    con.close()
+    return redirect(url_for('index'))
+
+
 @app.route('/apartment/<int:apartment_id>')
 def apartment_detail(apartment_id):
     con = get_db(); apartment = get_apartment(con, apartment_id)

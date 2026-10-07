@@ -1,1 +1,20 @@
-{% extends 'base.html' %}{% block content %}<div class="top"><div><h1>{{'Edytuj odczyt' if reading else 'Dodaj odczyt'}}</h1><p class="muted">Sekcja: {{section.section_name if reading else section.name}}</p></div></div><form class="form cardbox" method="post"><label>Miesiąc<input type="month" name="period" required value="{{reading.period if reading else month}}"></label><div class="two"><label>Aktualny odczyt<input type="number" step="0.001" name="reading" value="{{reading.reading if reading and reading.reading is not none else ''}}"></label><label>Poprzedni odczyt<input type="number" step="0.001" name="previous_reading" value="{{reading.previous_reading if reading and reading.previous_reading is not none else ''}}"></label></div><div class="two"><label>Zużycie <small>(jeśli puste, policzy się automatycznie)</small><input type="number" step="0.001" name="consumption" value="{{reading.consumption if reading and reading.consumption is not none else ''}}"></label><label>Stawka za jednostkę<input type="number" step="0.0001" name="rate" value="{{reading.rate if reading and reading.rate is not none else ''}}"></label></div><label>Kwota do zapłaty (zł)<input type="number" step="0.01" min="0" name="amount_due" required value="{{reading.amount_due if reading else ''}}"></label><label class="checkbox"><input type="checkbox" name="paid" {% if reading and reading.paid %}checked{% endif %}> Zapłacono</label><label>Data zapłaty<input type="date" name="paid_date" value="{{reading.paid_date or '' if reading else ''}}"></label><label>Notatki<textarea name="notes">{{reading.notes if reading else ''}}</textarea></label><button class="btn primary">Zapisz odczyt</button></form>{% endblock %}
+{% extends 'base.html' %}
+{% block content %}
+<div class="top"><div><a class="back" href="{{url_for('apartment_detail',apartment_id=section.apartment_id,month=month)}}">← Wróć</a><h1>{{'Edytuj odczyt' if reading else 'Dodaj odczyt'}}</h1><p class="muted">Sekcja: <b>{{section.section_name if reading else section.name}}</b>{% if section.unit %} · jednostka: <b>{{section.unit}}</b>{% endif %}</p></div></div>
+<form class="form cardbox" method="post">
+<label>Miesiąc<input type="month" name="period" required value="{{reading.period if reading else month}}"></label>
+<div class="two">
+<label>Aktualny odczyt {% if section.unit %}<small>({{section.unit}})</small>{% endif %}<input type="number" step="0.001" name="reading" value="{{reading.reading if reading and reading.reading is not none else ''}}"></label>
+<label>Poprzedni odczyt {% if section.unit %}<small>({{section.unit}})</small>{% endif %}<input type="number" step="0.001" name="previous_reading" value="{{reading.previous_reading if reading and reading.previous_reading is not none else ''}}"></label>
+</div>
+<div class="two">
+<label>Zużycie {% if section.unit %}<small>({{section.unit}})</small>{% endif %} <small>— jeśli puste, policzy się automatycznie</small><input type="number" step="0.001" name="consumption" value="{{reading.consumption if reading and reading.consumption is not none else ''}}"></label>
+<label>Stawka za jednostkę {% if section.unit %}<small>({{section.unit}})</small>{% endif %}<input type="number" step="0.0001" name="rate" value="{{reading.rate if reading and reading.rate is not none else ''}}"></label>
+</div>
+<label>Kwota do zapłaty (zł)<input type="number" step="0.01" min="0" name="amount_due" required value="{{reading.amount_due if reading else ''}}"></label>
+<label class="checkbox"><input type="checkbox" name="paid" {% if reading and reading.paid %}checked{% endif %}> Oznacz jako opłacone</label>
+<label>Data zapłaty<input type="date" name="paid_date" value="{{reading.paid_date or '' if reading else ''}}"></label>
+<label>Notatki<textarea name="notes">{{reading.notes if reading else ''}}</textarea></label>
+<button class="btn primary">Zapisz odczyt</button>
+</form>
+{% endblock %}

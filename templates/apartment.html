@@ -1,1 +1,74 @@
-{% extends 'base.html' %}{% block content %}<div class="top"><div><a href="{{url_for('index')}}">← Mieszkania</a><h1>{{apartment.name}}</h1><p class="muted">{{apartment.address or 'Brak adresu'}}</p></div><a class="btn" href="{{url_for('edit_apartment',apartment_id=apartment.id)}}">✎ Edytuj mieszkanie</a></div><div class="toolbar"><form method="get"><label>Miesiąc <input type="month" name="month" value="{{month}}"></label><button class="btn">Pokaż</button></form><div class="summary"><b>Razem: {{total|money}} zł</b><b>Zapłacono: {{paid|money}} zł</b><b>Saldo: {{(total-paid)|money}} zł</b></div></div><section class="cardbox"><h2>Sekcje / opłaty</h2><p class="muted">Dodaj dowolne sekcje: Gaz, Prąd, Woda, Śmieci, Ogrzewanie itd.</p><form class="inline-form" method="post" action="{{url_for('new_section',apartment_id=apartment.id)}}"><input type="hidden" name="month" value="{{month}}"><input name="name" placeholder="np. Gaz" required><input name="unit" placeholder="jednostka, np. m³ / kWh"><input name="notes" placeholder="Opis / notatka"><button class="btn primary">+ Dodaj sekcję</button></form></section><div class="sections">{% for s in sections %}<article class="section"><div class="section-head"><div><h2>{{s.name}}</h2><span class="muted">{{s.unit or 'bez jednostki'}}</span></div><div class="actions"><a href="{{url_for('edit_section',section_id=s.id)}}?month={{month}}">Edytuj</a><form method="post" action="{{url_for('delete_section',section_id=s.id)}}" onsubmit="return confirm('Usunąć sekcję razem z jej odczytami?')"><button>Usuń</button></form></div></div>{% if s.reading_id %}<div class="reading"><div><b>Odczyt:</b> {{s.reading if s.reading is not none else '—'}} {% if s.unit %}{{s.unit}}{% endif %}</div><div><b>Poprzedni:</b> {{s.previous_reading if s.previous_reading is not none else '—'}}</div><div><b>Zużycie:</b> {{s.consumption if s.consumption is not none else '—'}}</div><div><b>Kwota:</b> {{s.amount_due|money}} zł</div><div class="pay">{% if s.paid %}<span class="paid">✓ Zapłacono</span>{% else %}<span class="unpaid">Nieopłacone</span>{% endif %}<form method="post" action="{{url_for('toggle_paid',reading_id=s.reading_id)}}"><button class="check">{% if s.paid %}☑{% else %}☐{% endif %} Odhacz płatność</button></form></div><div class="actions"><a href="{{url_for('edit_reading',reading_id=s.reading_id)}}">Edytuj odczyt</a><form method="post" action="{{url_for('delete_reading',reading_id=s.reading_id)}}" onsubmit="return confirm('Usunąć ten odczyt?')"><button>Usuń odczyt</button></form></div></div>{% else %}<div class="empty small">Brak odczytu dla {{month}}. <a href="{{url_for('new_reading',section_id=s.id,month=month)}}">+ Dodaj odczyt i kwotę</a></div>{% endif %}</article>{% else %}<div class="empty">Nie masz jeszcze żadnych sekcji.</div>{% endfor %}</div>{% endblock %}
+{% extends 'base.html' %}
+{% block content %}
+<div class="top">
+  <div>
+    <a class="back" href="{{url_for('index')}}">← Mieszkania</a>
+    <div class="eyebrow">MIESZKANIE</div>
+    <h1>{{apartment.name}}</h1>
+    <p class="muted">{{apartment.address or 'Brak adresu'}}</p>
+  </div>
+  <div class="top-actions">
+    <a class="btn" href="{{url_for('edit_apartment',apartment_id=apartment.id)}}">✎ Edytuj</a>
+    <form method="post" action="{{url_for('delete_apartment',apartment_id=apartment.id)}}" onsubmit="return confirm('Usunąć mieszkanie {{apartment.name}}? Zostaną usunięte także jego sekcje i odczyty. Tej operacji nie można cofnąć.')">
+      <button class="btn danger-btn" type="submit">🗑 Usuń mieszkanie</button>
+    </form>
+  </div>
+</div>
+
+<div class="toolbar glass">
+  <form method="get"><label>Miesiąc <input type="month" name="month" value="{{month}}"></label><button class="btn">Pokaż</button></form>
+  <div class="summary">
+    <span>Razem <b>{{total|money}} zł</b></span>
+    <span class="summary-paid">Zapłacono <b>{{paid|money}} zł</b></span>
+    <span class="summary-due">Saldo <b>{{(total-paid)|money}} zł</b></span>
+  </div>
+</div>
+
+<section class="cardbox">
+  <div class="section-intro">
+    <div><h2>Sekcje / opłaty</h2><p class="muted">Gaz, prąd, woda, ogrzewanie, śmieci, czynsz — dodaj własne pozycje.</p></div>
+  </div>
+  <form class="inline-form" method="post" action="{{url_for('new_section',apartment_id=apartment.id)}}">
+    <input type="hidden" name="month" value="{{month}}">
+    <input name="name" placeholder="np. Gaz" required>
+    <input name="unit" placeholder="jednostka, np. m³ / kWh">
+    <input name="notes" placeholder="Opis / notatka">
+    <button class="btn primary">＋ Dodaj sekcję</button>
+  </form>
+</section>
+
+<div class="sections">
+{% for s in sections %}
+<article class="section">
+  <div class="section-head">
+    <div><h2>{{s.name}}</h2><span class="unit-badge">{{s.unit or 'bez jednostki'}}</span></div>
+    <div class="actions">
+      <a href="{{url_for('edit_section',section_id=s.id)}}?month={{month}}">Edytuj</a>
+      <form method="post" action="{{url_for('delete_section',section_id=s.id)}}" onsubmit="return confirm('Usunąć sekcję razem z jej odczytami?')"><button type="submit">Usuń</button></form>
+    </div>
+  </div>
+
+  {% if s.reading_id %}
+  <div class="reading">
+    <div class="reading-item"><span>Obecny odczyt</span><b>{{s.reading if s.reading is not none else '—'}}{% if s.unit %} {{s.unit}}{% endif %}</b></div>
+    <div class="reading-item"><span>Poprzedni odczyt</span><b>{{s.previous_reading if s.previous_reading is not none else '—'}}{% if s.unit %} {{s.unit}}{% endif %}</b></div>
+    <div class="reading-item"><span>Zużycie</span><b>{{s.consumption if s.consumption is not none else '—'}}{% if s.unit %} {{s.unit}}{% endif %}</b></div>
+    <div class="reading-item"><span>Kwota</span><b>{{s.amount_due|money}} zł</b></div>
+    <div class="pay">
+      {% if s.paid %}<span class="status paid">✓ OPŁACONE</span>{% else %}<span class="status unpaid">! NIEOPŁACONE</span>{% endif %}
+      <form method="post" action="{{url_for('toggle_paid',reading_id=s.reading_id)}}"><button class="check">{% if s.paid %}☑ Oznacz jako nieopłacone{% else %}☐ Oznacz jako opłacone{% endif %}</button></form>
+    </div>
+  </div>
+  <div class="reading-footer">
+    <span class="muted">{% if s.paid_date %}Zapłacono: {{s.paid_date}}{% endif %}</span>
+    <div class="actions"><a href="{{url_for('edit_reading',reading_id=s.reading_id)}}">✎ Edytuj odczyt</a><form method="post" action="{{url_for('delete_reading',reading_id=s.reading_id)}}" onsubmit="return confirm('Usunąć ten odczyt?')"><button type="submit">Usuń odczyt</button></form></div>
+  </div>
+  {% else %}
+    <div class="empty small">Brak odczytu dla {{month}}. <a href="{{url_for('new_reading',section_id=s.id,month=month)}}">＋ Dodaj odczyt i kwotę</a></div>
+  {% endif %}
+</article>
+{% else %}
+<div class="empty">Nie masz jeszcze żadnych sekcji.</div>
+{% endfor %}
+</div>
+{% endblock %}

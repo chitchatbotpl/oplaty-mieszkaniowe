@@ -1,1 +1,28 @@
-<!doctype html><html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Opłaty mieszkaniowe</title><link rel="stylesheet" href="{{ url_for('static',filename='style.css') }}"></head><body><header><div class="wrap nav"><a class="brand" href="{{ url_for('index') }}">🏠 Opłaty mieszkaniowe</a><nav><a href="{{ url_for('index') }}">Mieszkania</a><a href="{{ url_for('reports') }}">Raporty</a><a href="{{ url_for('export_csv') }}">CSV</a></nav></div></header><main class="wrap">{% with messages=get_flashed_messages() %}{% for m in messages %}<div class="flash">{{m}}</div>{% endfor %}{% endwith %}{% block content %}{% endblock %}</main></body></html>
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>OPŁATY</title>
+  <link rel="stylesheet" href="{{ url_for('static',filename='style.css') }}">
+</head>
+<body>
+<header>
+  <div class="wrap nav">
+    <a class="brand" href="{{ url_for('index') }}"><span class="brand-mark">O</span> OPŁATY</a>
+    <nav>
+      <a href="{{ url_for('index') }}">Mieszkania</a>
+      <a href="{{ url_for('reports') }}">Raporty</a>
+      <a href="{{ url_for('export_csv') }}">CSV</a>
+    </nav>
+  </div>
+</header>
+<main class="wrap">
+  {% with messages=get_flashed_messages() %}
+    {% for m in messages %}<div class="flash">{{m}}</div>{% endfor %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</main>
+<footer class="wrap footer">OPŁATY · zarządzanie mieszkaniami i rachunkami</footer>
+</body>
+</html>
