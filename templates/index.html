@@ -11,11 +11,11 @@
 <div class="cards">
   <div class="stat-card danger-stat"><span>Do zapłaty</span><strong>{{ (totals.total-totals.paid)|money }} zł</strong></div>
   <div class="stat-card success-stat"><span>Zapłacono</span><strong>{{ totals.paid|money }} zł</strong></div>
-  <div class="stat-card"><span>Rok i miesiąc</span><strong>{{month}}</strong></div>
+  <div class="stat-card"><span>Wybrany okres</span><strong>{{month[5:7]}}.{{month[0:4]}}</strong></div>
 </div>
 
 <form class="month glass" method="get">
-  <label class="month-picker-label">Rok i miesiąc <input class="month-picker" type="month" name="month" value="{{month}}"></label>
+  <label class="month-picker-label">Rok i miesiąc <input class="month-picker" type="month" name="month" value="{{month}}" aria-label="Wybierz rok i miesiąc"></label>
   <button class="btn">Pokaż</button>
 </form>
 
