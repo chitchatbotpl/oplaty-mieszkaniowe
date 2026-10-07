@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>OPŁATY</title>
+  <title>OPŁATY · zarządzanie mieszkaniami i rachunkami</title>
   <link rel="stylesheet" href="{{ url_for('static',filename='style.css') }}">
 </head>
 <body>
 <header>
   <div class="wrap nav">
-    <a class="brand" href="{{ url_for('index') }}"><span class="brand-mark">O</span> OPŁATY</a>
+    <a class="brand" href="{{ url_for('index') }}"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 64 64" role="img"><path d="M8 30.5 32 10l24 20.5V56H39V41H25v15H8z" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round"/><path d="M4 31 32 7l28 24" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>OPŁATY</span><span class="brand-sub">· zarządzanie mieszkaniami i rachunkami</span></a>
     <nav>
-      <a href="{{ url_for('index') }}">Mieszkania</a>
+      <a href="{{ url_for('index') }}">Panel główny</a>
       <a href="{{ url_for('reports') }}">Raporty</a>
       <a href="{{ url_for('export_csv') }}">CSV</a>
     </nav>
