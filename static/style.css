@@ -65,3 +65,22 @@ header{background:linear-gradient(90deg,rgba(255,255,255,.94),rgba(20,20,20,.94)
 .user-row:last-child { border-bottom: 0; }
 .user-row small { display: block; opacity: .6; margin-top: 3px; }
 .btn.danger { background: #111; color: #fff; }
+
+
+/* v9 - wycentrowanie ikony domku przy logo OPŁATY */
+.brand-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.brand-logo svg {
+  display: block;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+}
+.brand-logo svg path, .brand-logo svg rect, .brand-logo svg circle, .brand-logo svg polygon {
+  transform-box: fill-box;
+  transform-origin: center;
+}
