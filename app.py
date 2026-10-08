@@ -15,10 +15,6 @@ app.secret_key = os.environ.get('SECRET_KEY', 'oplaty-dev-key')
 BASE_DIR = Path(__file__).resolve().parent
 DB = BASE_DIR / 'oplaty.db'
 
-if os.environ.get('DATABASE_URL', '').strip():
-    print("=== DATABASE BACKEND: POSTGRESQL ===")
-else:
-    print("=== DATABASE BACKEND: SQLITE ===")
 
 def using_postgres():
     return bool(os.environ.get('DATABASE_URL', '').strip())

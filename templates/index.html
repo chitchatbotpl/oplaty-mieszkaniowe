@@ -14,10 +14,30 @@
   <div class="stat-card"><span>Wybrany okres</span><strong>{{month[5:7]}}.{{month[0:4]}}</strong></div>
 </div>
 
-<form class="month glass" method="get">
-  <label class="month-picker-label">Rok i miesiąc <input class="month-picker" type="month" name="month" value="{{month}}" aria-label="Wybierz rok i miesiąc"></label>
-  <button class="btn">Pokaż</button>
+<form class="month glass" method="get" onsubmit="syncMonth()">
+  <div class="month-picker-group">
+    <span class="month-picker-label">Rok i miesiąc</span>
+    <div class="month-selects">
+      <select class="month-picker" id="month-year" aria-label="Wybierz rok">
+        {% for y in range(2020, 2036) %}
+          <option value="{{y}}" {% if month[0:4]|int == y %}selected{% endif %}>{{y}}</option>
+        {% endfor %}
+      </select>
+      <select class="month-picker" id="month-month" aria-label="Wybierz miesiąc">
+        {% for m, name in [('01','Styczeń'),('02','Luty'),('03','Marzec'),('04','Kwiecień'),('05','Maj'),('06','Czerwiec'),('07','Lipiec'),('08','Sierpień'),('09','Wrzesień'),('10','Październik'),('11','Listopad'),('12','Grudzień')] %}
+          <option value="{{m}}" {% if month[5:7] == m %}selected{% endif %}>{{name}}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+  <input type="hidden" name="month" id="selected-month" value="{{month}}">
+  <button class="btn" type="submit">Pokaż</button>
 </form>
+<script>
+function syncMonth() {
+  document.getElementById('selected-month').value = document.getElementById('month-year').value + '-' + document.getElementById('month-month').value;
+}
+</script>
 
 <div class="grid">
 {% for a in apartments %}

@@ -14,3 +14,11 @@ header{background:linear-gradient(90deg,rgba(255,255,255,.94),rgba(20,20,20,.94)
 .empty{padding:25px;background:rgba(255,255,255,.9);border:1px dashed #bfc5ca;border-radius:13px}.small{padding:15px}.flash{background:#fff3cd;border:1px solid #e4c66b;padding:11px;border-radius:10px;margin-bottom:15px}.table-wrap{overflow:auto;background:rgba(255,255,255,.94);border-radius:14px;border:1px solid #dde2e6;box-shadow:0 12px 35px #0002}table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:11px;border-bottom:1px solid #e7ebef;white-space:nowrap}th{background:#111;color:#fff}.checkbox{display:flex!important;gap:8px;align-items:center}.checkbox input{width:auto!important;margin:0!important}.top-actions{display:flex;gap:8px;align-items:center}.top-actions form{margin:0}.section-intro{margin-bottom:12px}.footer{color:#fff;text-align:center;font-size:12px;opacity:.75;padding-top:35px;padding-bottom:35px}
 @media(max-width:900px){.grid,.cards{grid-template-columns:1fr}.inline-form,.two{grid-template-columns:1fr}.reading{grid-template-columns:1fr 1fr}.nav{flex-direction:column;align-items:flex-start;gap:10px}.top,.hero,.toolbar{align-items:flex-start;flex-direction:column}.top-actions{flex-wrap:wrap}.month{align-items:flex-start;flex-direction:column}.reading-footer{align-items:flex-start;flex-direction:column}}
 @media(max-width:520px){.reading{grid-template-columns:1fr}.nav nav{width:100%;flex-wrap:wrap}.brand{font-size:17px;white-space:normal;flex-wrap:wrap}.brand-sub{font-size:11px}.main-title{font-size:34px}h1{font-size:28px}}
+
+
+/* v7 - wybór roku i miesiąca */
+.month-picker-group { display:flex; flex-direction:column; gap:7px; }
+.month-picker-label { font-weight:700; }
+.month-selects { display:flex; gap:10px; flex-wrap:wrap; }
+.month-picker { min-width:150px; }
+@media (max-width:600px) { .month-selects { width:100%; } .month-picker { flex:1; min-width:130px; } }
