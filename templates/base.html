@@ -14,6 +14,8 @@
       <a href="{{ url_for('index') }}">Panel główny</a>
       <a href="{{ url_for('reports') }}">Raporty</a>
       <a href="{{ url_for('export_csv') }}">CSV</a>
+      {% if current_user_role == 'admin' %}<a href="{{ url_for('users') }}">Użytkownicy</a>{% endif %}
+      {% if current_user_email %}<a href="{{ url_for('logout') }}">Wyloguj ({{ current_user_email }})</a>{% endif %}
     </nav>
   </div>
 </header>

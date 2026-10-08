@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="hero">
+  <div>
+    <div class="eyebrow">ADMINISTRACJA</div>
+    <h1>Użytkownicy</h1>
+    <p>Dodawaj osoby, które mogą korzystać z panelu OPŁAT.</p>
+  </div>
+</section>
+
+<div class="grid-2 user-admin-grid">
+  <section class="glass card">
+    <h2>Dodaj użytkownika</h2>
+    <form method="post" class="stack-form">
+      <label>E-mail
+        <input type="email" name="email" autocomplete="off" required>
+      </label>
+      <label>Hasło
+        <input type="password" name="password" minlength="8" autocomplete="new-password" required>
+      </label>
+      <label>Rola
+        <select name="role">
+          <option value="user">Użytkownik</option>
+          <option value="admin">Administrator</option>
+        </select>
+      </label>
+      <button class="btn" type="submit">Dodaj konto</button>
+    </form>
+  </section>
+
+  <section class="glass card">
+    <h2>Istniejące konta</h2>
+    <div class="user-list">
+      {% for user in users %}
+      <div class="user-row">
+        <div>
+          <strong>{{user.email}}</strong>
+          <small>{{ 'Administrator' if user.role == 'admin' else 'Użytkownik' }}</small>
+        </div>
+        {% if user.id != session.get('user_id') %}
+        <form method="post" action="{{url_for('delete_user', user_id=user.id)}}" onsubmit="return confirm('Usunąć konto {{user.email}}?');">
+          <button class="btn danger" type="submit">Usuń</button>
+        </form>
+        {% else %}
+        <span class="badge paid">Twoje konto</span>
+        {% endif %}
+      </div>
+      {% else %}
+        <p>Brak użytkowników.</p>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}

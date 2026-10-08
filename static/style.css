@@ -22,3 +22,46 @@ header{background:linear-gradient(90deg,rgba(255,255,255,.94),rgba(20,20,20,.94)
 .month-selects { display:flex; gap:10px; flex-wrap:wrap; }
 .month-picker { min-width:150px; }
 @media (max-width:600px) { .month-selects { width:100%; } .month-picker { flex:1; min-width:130px; } }
+
+
+/* v8 - logowanie i użytkownicy */
+.login-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.login-card {
+  width: min(460px, 100%);
+  padding: 32px;
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 26px;
+}
+
+.login-brand .brand-mark { width: 42px; height: 42px; display: inline-flex; }
+.login-brand strong { display: block; font-size: 1.5rem; letter-spacing: .04em; }
+.login-brand small { display: block; opacity: .65; }
+
+.stack-form { display: grid; gap: 15px; }
+.stack-form label { display: grid; gap: 7px; font-weight: 700; }
+.stack-form input, .stack-form select { width: 100%; box-sizing: border-box; }
+
+.user-admin-grid { align-items: start; }
+.user-list { display: grid; gap: 10px; }
+.user-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(0,0,0,.08);
+}
+.user-row:last-child { border-bottom: 0; }
+.user-row small { display: block; opacity: .6; margin-top: 3px; }
+.btn.danger { background: #111; color: #fff; }

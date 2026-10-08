@@ -1,5 +1,7 @@
-from flask import Flask, render_template, request, redirect, url_for, send_file, flash
+from flask import Flask, render_template, request, redirect, url_for, send_file, flash, session
 import os, sqlite3, csv, io
+from functools import wraps
+from werkzeug.security import generate_password_hash, check_password_hash
 from pathlib import Path
 from datetime import datetime
 
@@ -12,8 +14,39 @@ except ImportError:
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'oplaty-dev-key')
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+    SESSION_COOKIE_SECURE=bool(os.environ.get('RENDER')),
+)
 BASE_DIR = Path(__file__).resolve().parent
 DB = BASE_DIR / 'oplaty.db'
+
+
+def login_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login', next=request.path))
+        return view(*args, **kwargs)
+    return wrapped
+
+
+def admin_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login', next=request.path))
+        if session.get('role') != 'admin':
+            flash('Brak uprawnień administratora.')
+            return redirect(url_for('index'))
+        return view(*args, **kwargs)
+    return wrapped
+
+
+@app.context_processor
+def inject_user():
+    return {'current_user_email': session.get('email'), 'current_user_role': session.get('role')}
 
 
 def using_postgres():
@@ -76,6 +109,14 @@ def db_script_init(con):
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(section_id, period)
             )'''
+            ,'''CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                email TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'user',
+                active INTEGER NOT NULL DEFAULT 1,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )'''
         ]
         for s in statements:
             con.execute(s)
@@ -116,7 +157,30 @@ def db_script_init(con):
             UNIQUE(section_id, period),
             FOREIGN KEY(section_id) REFERENCES sections(id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT 'user',
+            active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
         ''')
+
+
+def ensure_admin_user():
+    email = os.environ.get('ADMIN_EMAIL', '').strip().lower()
+    password = os.environ.get('ADMIN_PASSWORD', '')
+    if not email or not password:
+        return
+    con = get_db()
+    count = db_execute(con, 'SELECT COUNT(*) AS n FROM users').fetchone()['n']
+    if count == 0:
+        db_execute(con, 'INSERT INTO users(email,password_hash,role,active) VALUES (?,?,?,1)',
+                   (email, generate_password_hash(password), 'admin'))
+        con.commit()
+        print(f'=== ADMIN USER CREATED: {email} ===')
+    con.close()
 
 
 def init_db():
@@ -142,7 +206,83 @@ def get_apartment(con, apartment_id):
     return db_execute(con, 'SELECT * FROM apartments WHERE id=?', (apartment_id,)).fetchone()
 
 
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip().lower()
+        password = request.form.get('password', '')
+        con = get_db()
+        user = db_execute(con, 'SELECT * FROM users WHERE email=? AND active=1', (email,)).fetchone()
+        con.close()
+        if user and check_password_hash(user['password_hash'], password):
+            session.clear()
+            session['user_id'] = user['id']
+            session['email'] = user['email']
+            session['role'] = user['role']
+            next_url = request.form.get('next') or url_for('index')
+            if not next_url.startswith('/') or next_url.startswith('//'):
+                next_url = url_for('index')
+            return redirect(next_url)
+        flash('Nieprawidłowy e-mail lub hasło.')
+    return render_template('login.html', next=request.args.get('next', ''))
+
+
+@app.get('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+
+@app.route('/users', methods=['GET', 'POST'])
+@admin_required
+def users():
+    con = get_db()
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip().lower()
+        password = request.form.get('password', '')
+        role = request.form.get('role', 'user') if request.form.get('role') in ('user', 'admin') else 'user'
+        if not email or not password:
+            flash('E-mail i hasło są wymagane.')
+        elif len(password) < 8:
+            flash('Hasło musi mieć co najmniej 8 znaków.')
+        else:
+            try:
+                db_execute(con, 'INSERT INTO users(email,password_hash,role,active) VALUES (?,?,?,1)',
+                           (email, generate_password_hash(password), role))
+                con.commit()
+                flash('Użytkownik został dodany.')
+            except Exception:
+                con.rollback()
+                flash('Nie udało się dodać użytkownika. Sprawdź, czy e-mail nie jest już zajęty.')
+    users_rows = db_execute(con, 'SELECT id,email,role,active,created_at FROM users ORDER BY email').fetchall()
+    con.close()
+    return render_template('users.html', users=users_rows)
+
+
+@app.post('/users/<int:user_id>/delete')
+@admin_required
+def delete_user(user_id):
+    if user_id == session.get('user_id'):
+        flash('Nie możesz usunąć własnego konta podczas bieżącej sesji.')
+        return redirect(url_for('users'))
+    con = get_db()
+    user = db_execute(con, 'SELECT id,role FROM users WHERE id=?', (user_id,)).fetchone()
+    if user:
+        if user['role'] == 'admin':
+            admins = db_execute(con, "SELECT COUNT(*) AS n FROM users WHERE role='admin' AND active=1").fetchone()['n']
+            if admins <= 1:
+                con.close()
+                flash('Nie można usunąć ostatniego aktywnego administratora.')
+                return redirect(url_for('users'))
+        db_execute(con, 'DELETE FROM users WHERE id=?', (user_id,))
+        con.commit()
+        flash('Użytkownik został usunięty.')
+    con.close()
+    return redirect(url_for('users'))
+
+
 @app.route('/')
+@login_required
 def index():
     con = get_db()
     apartments = db_execute(con, '''
@@ -161,11 +301,13 @@ def index():
 
 
 @app.route('/apartments')
+@login_required
 def apartments():
     return redirect(url_for('index'))
 
 
 @app.route('/apartment/new', methods=['GET','POST'])
+@login_required
 def new_apartment():
     if request.method == 'POST':
         con = get_db()
@@ -178,6 +320,7 @@ def new_apartment():
 
 
 @app.route('/apartment/<int:apartment_id>/edit', methods=['GET','POST'])
+@login_required
 def edit_apartment(apartment_id):
     con = get_db(); apartment = get_apartment(con, apartment_id)
     if not apartment:
@@ -193,6 +336,7 @@ def edit_apartment(apartment_id):
 
 
 @app.post('/apartment/<int:apartment_id>/delete')
+@login_required
 def delete_apartment(apartment_id):
     con = get_db()
     apartment = get_apartment(con, apartment_id)
@@ -205,6 +349,7 @@ def delete_apartment(apartment_id):
 
 
 @app.route('/apartment/<int:apartment_id>')
+@login_required
 def apartment_detail(apartment_id):
     con = get_db(); apartment = get_apartment(con, apartment_id)
     if not apartment:
@@ -223,6 +368,7 @@ def apartment_detail(apartment_id):
 
 
 @app.post('/apartment/<int:apartment_id>/section/new')
+@login_required
 def new_section(apartment_id):
     con = get_db()
     db_execute(con, 'INSERT INTO sections(apartment_id,name,unit,notes) VALUES (?,?,?,?)', (
@@ -232,6 +378,7 @@ def new_section(apartment_id):
 
 
 @app.route('/section/<int:section_id>/edit', methods=['GET','POST'])
+@login_required
 def edit_section(section_id):
     con = get_db(); section = db_execute(con, 'SELECT * FROM sections WHERE id=?', (section_id,)).fetchone()
     if not section:
@@ -246,6 +393,7 @@ def edit_section(section_id):
 
 
 @app.post('/section/<int:section_id>/delete')
+@login_required
 def delete_section(section_id):
     con = get_db(); section = db_execute(con, 'SELECT apartment_id FROM sections WHERE id=?', (section_id,)).fetchone()
     if section:
@@ -258,6 +406,7 @@ def delete_section(section_id):
 
 
 @app.route('/section/<int:section_id>/reading/new', methods=['GET','POST'])
+@login_required
 def new_reading(section_id):
     con = get_db(); section = db_execute(con, 'SELECT * FROM sections WHERE id=?', (section_id,)).fetchone()
     if not section:
@@ -284,6 +433,7 @@ def new_reading(section_id):
 
 
 @app.route('/reading/<int:reading_id>/edit', methods=['GET','POST'])
+@login_required
 def edit_reading(reading_id):
     con = get_db(); reading = db_execute(con, '''SELECT r.*, s.name AS section_name, s.unit, s.apartment_id
                                                 FROM readings r JOIN sections s ON s.id=r.section_id WHERE r.id=?''', (reading_id,)).fetchone()
@@ -304,6 +454,7 @@ def edit_reading(reading_id):
 
 
 @app.post('/reading/<int:reading_id>/paid')
+@login_required
 def toggle_paid(reading_id):
     con=get_db(); r=db_execute(con, 'SELECT * FROM readings WHERE id=?', (reading_id,)).fetchone()
     if r:
@@ -316,6 +467,7 @@ def toggle_paid(reading_id):
 
 
 @app.post('/reading/<int:reading_id>/delete')
+@login_required
 def delete_reading(reading_id):
     con=get_db(); r=db_execute(con, '''SELECT r.period,s.apartment_id FROM readings r JOIN sections s ON s.id=r.section_id WHERE r.id=?''',(reading_id,)).fetchone()
     if r:
@@ -327,6 +479,7 @@ def delete_reading(reading_id):
 
 
 @app.route('/reports')
+@login_required
 def reports():
     con=get_db(); year=request.args.get('year',datetime.now().strftime('%Y'))
     rows=db_execute(con, '''SELECT r.period, a.name AS apartment, s.name AS section, r.reading, r.previous_reading,
@@ -337,6 +490,7 @@ def reports():
 
 
 @app.route('/export.csv')
+@login_required
 def export_csv():
     con=get_db(); rows=db_execute(con, '''SELECT r.period,a.name AS apartment,s.name AS section,r.reading,r.previous_reading,
         r.consumption,r.rate,r.amount_due,r.paid,r.paid_date,r.notes
@@ -349,6 +503,7 @@ def export_csv():
 
 
 init_db()
+ensure_admin_user()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0',port=5000,debug=False)

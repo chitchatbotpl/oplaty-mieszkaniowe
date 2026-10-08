@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Logowanie · OPŁATY</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="login-page">
+  <main class="login-card glass">
+    <div class="login-brand">
+      <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 64 64" role="img"><path d="M8 30.5 32 10l24 20.5V56H39V41H25v15H8z" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round"/><path d="M4 31 32 7l28 24" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      <div><strong>OPŁATY</strong><small>zarządzanie mieszkaniami i rachunkami</small></div>
+    </div>
+
+    <h1>Logowanie</h1>
+    {% with messages=get_flashed_messages() %}
+      {% for m in messages %}<div class="flash">{{m}}</div>{% endfor %}
+    {% endwith %}
+
+    <form method="post" class="stack-form">
+      <input type="hidden" name="next" value="{{next}}">
+      <label>E-mail
+        <input type="email" name="email" autocomplete="username" required autofocus>
+      </label>
+      <label>Hasło
+        <input type="password" name="password" autocomplete="current-password" required>
+      </label>
+      <button class="btn" type="submit">Zaloguj</button>
+    </form>
+  </main>
+</body>
+</html>
