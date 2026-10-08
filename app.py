@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, send_file, flash, session
-import os, sqlite3, csv, io
+import os, sqlite3, csv, io, json, urllib.request, urllib.error
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
 from pathlib import Path
@@ -205,7 +205,99 @@ def money(v):
 def get_apartment(con, apartment_id):
     return db_execute(con, 'SELECT * FROM apartments WHERE id=?', (apartment_id,)).fetchone()
 
+def send_brevo_email(recipient_email, subject, html_content, text_content=None):
+    api_key = os.environ.get('BREVO_API_KEY', '').strip()
 
+    if not api_key:
+        raise RuntimeError('Brak zmiennej BREVO_API_KEY w środowisku Render.')
+
+    sender_email = os.environ.get('BREVO_SENDER_EMAIL', '').strip()
+    sender_name = os.environ.get('BREVO_SENDER_NAME', 'OPŁATY').strip()
+
+    if not sender_email:
+        raise RuntimeError('Brak zmiennej BREVO_SENDER_EMAIL w środowisku Render.')
+
+    payload = {
+        'sender': {
+            'name': sender_name,
+            'email': sender_email
+        },
+        'to': [
+            {
+                'email': recipient_email
+            }
+        ],
+        'subject': subject,
+        'htmlContent': html_content
+    }
+
+    if text_content:
+        payload['textContent'] = text_content
+
+    data = json.dumps(payload).encode('utf-8')
+
+    req = urllib.request.Request(
+        'https://api.brevo.com/v3/smtp/email',
+        data=data,
+        headers={
+            'accept': 'application/json',
+            'api-key': api_key,
+            'content-type': 'application/json'
+        },
+        method='POST'
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=20) as response:
+            response_data = response.read().decode('utf-8')
+            return json.loads(response_data)
+
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode('utf-8', errors='replace')
+        raise RuntimeError(
+            f'Brevo API zwróciło błąd HTTP {e.code}: {error_body}'
+        )
+
+    except urllib.error.URLError as e:
+        raise RuntimeError(
+            f'Nie udało się połączyć z Brevo: {e.reason}'
+        )
+@app.post('/test-email')
+@admin_required
+def test_email():
+    recipient = session.get('email')
+
+    if not recipient:
+        flash('Nie znaleziono adresu e-mail zalogowanego użytkownika.')
+        return redirect(url_for('index'))
+
+    try:
+        result = send_brevo_email(
+            recipient_email=recipient,
+            subject='OPŁATY — test wiadomości e-mail',
+            html_content='''
+                <html>
+                <body style="font-family: Arial, sans-serif;">
+                    <h2>OPŁATY</h2>
+                    <p>To jest testowa wiadomość wysłana przez aplikację.</p>
+                    <p>Jeżeli widzisz ten e-mail, połączenie OPŁATY → Brevo działa poprawnie.</p>
+                </body>
+                </html>
+            ''',
+            text_content=(
+                'OPŁATY — test wiadomości e-mail\n\n'
+                'To jest testowa wiadomość wysłana przez aplikację.\n'
+                'Jeżeli widzisz ten e-mail, połączenie OPŁATY → Brevo działa poprawnie.'
+            )
+        )
+
+        message_id = result.get('messageId', 'brak')
+        flash(f'Testowy e-mail został wysłany. ID wiadomości: {message_id}')
+
+    except Exception as e:
+        flash(f'Nie udało się wysłać wiadomości: {e}')
+
+    return redirect(url_for('index'))
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
