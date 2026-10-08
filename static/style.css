@@ -84,3 +84,11 @@ header{background:linear-gradient(90deg,rgba(255,255,255,.94),rgba(20,20,20,.94)
   transform-box: fill-box;
   transform-origin: center;
 }
+
+/* v11 - raporty */
+.actions { display:flex; gap:10px; flex-wrap:wrap; }
+.report-month { margin-top:18px; padding:18px; }
+.report-month-head { margin-bottom:10px; }
+.report-summary { display:flex; gap:18px; flex-wrap:wrap; font-size:.92rem; }
+.report-summary strong { font-weight:800; }
+.muted { opacity:.7; }

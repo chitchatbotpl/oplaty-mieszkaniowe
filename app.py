@@ -478,28 +478,117 @@ def delete_reading(reading_id):
     return redirect(url_for('apartment_detail', apartment_id=apartment_id, month=month)) if apartment_id else redirect(url_for('index'))
 
 
+def get_report_data(year, apartment_id=None):
+    con = get_db()
+    apartments = db_execute(con, 'SELECT id,name FROM apartments WHERE active=1 ORDER BY name').fetchall()
+    apartment_sql = ''
+    apt_param = []
+    if apartment_id:
+        apartment_sql = ' AND a.id=?'
+        apt_param = [int(apartment_id)]
+    sections = db_execute(con, f"""
+        SELECT s.id AS section_id, s.name AS section, s.unit,
+               a.id AS apartment_id, a.name AS apartment
+        FROM sections s JOIN apartments a ON a.id=s.apartment_id
+        WHERE s.active=1 AND a.active=1 {apartment_sql}
+        ORDER BY a.name, s.name
+    """, tuple(apt_param)).fetchall()
+    readings = db_execute(con, f"""
+        SELECT r.id, r.period, r.section_id, r.reading, r.previous_reading,
+               r.consumption, r.rate, r.amount_due, r.paid, r.paid_date, r.notes
+        FROM readings r JOIN sections s ON s.id=r.section_id
+        JOIN apartments a ON a.id=s.apartment_id
+        WHERE r.period LIKE ? {apartment_sql}
+    """, tuple([str(year)+'-%'] + apt_param)).fetchall()
+    con.close()
+    reading_map={(r['section_id'],r['period']):r for r in readings}
+    rows=[]
+    for month_num in range(1,13):
+        period=f'{int(year):04d}-{month_num:02d}'
+        for sec in sections:
+            r=reading_map.get((sec['section_id'],period))
+            if r is None: status='BRAK ODCZYTU / KWOTY'
+            elif r['paid']: status='OPŁACONE'
+            else: status='NIEOPŁACONE'
+            rows.append({'period':period,'apartment':sec['apartment'],'apartment_id':sec['apartment_id'],
+                'section':sec['section'],'unit':sec['unit'] or '','reading_id':r['id'] if r else None,
+                'reading':r['reading'] if r else None,'previous_reading':r['previous_reading'] if r else None,
+                'consumption':r['consumption'] if r else None,'rate':r['rate'] if r else None,
+                'amount_due':float(r['amount_due'] or 0) if r else 0.0,'paid':bool(r['paid']) if r else False,
+                'paid_date':r['paid_date'] if r else None,'notes':r['notes'] if r else '','status':status})
+    return rows, apartments
+
 @app.route('/reports')
 @login_required
 def reports():
-    con=get_db(); year=request.args.get('year',datetime.now().strftime('%Y'))
-    rows=db_execute(con, '''SELECT r.period, a.name AS apartment, s.name AS section, r.reading, r.previous_reading,
-                            r.consumption, r.rate, r.amount_due, r.paid
-                            FROM readings r JOIN sections s ON s.id=r.section_id JOIN apartments a ON a.id=s.apartment_id
-                            WHERE r.period LIKE ? ORDER BY r.period DESC,a.name,s.name''',(year+'-%',)).fetchall()
-    con.close(); return render_template('reports.html',rows=rows,year=year)
+    year=request.args.get('year',datetime.now().strftime('%Y'))
+    try: year=str(int(year))
+    except ValueError: year=datetime.now().strftime('%Y')
+    apartment_id=request.args.get('apartment_id','').strip()
+    apartment_id=int(apartment_id) if apartment_id.isdigit() else None
+    rows,apartments=get_report_data(year,apartment_id)
+    names=['Styczeń','Luty','Marzec','Kwiecień','Maj','Czerwiec','Lipiec','Sierpień','Wrzesień','Październik','Listopad','Grudzień']
+    months=[]
+    for i,name in enumerate(names,1):
+        mr=[r for r in rows if r['period'].endswith(f'-{i:02d}')]
+        months.append({'period':f'{year}-{i:02d}','name':name,'rows':mr,
+            'total':sum(r['amount_due'] for r in mr if r['reading_id']),
+            'unpaid':sum(r['amount_due'] for r in mr if r['reading_id'] and not r['paid']),
+            'missing':sum(1 for r in mr if not r['reading_id'])})
+    return render_template('reports.html',months=months,apartments=apartments,year=year,apartment_id=apartment_id)
 
+def report_query_params():
+    year=request.args.get('year',datetime.now().strftime('%Y'))
+    try: year=str(int(year))
+    except ValueError: year=datetime.now().strftime('%Y')
+    apartment_id=request.args.get('apartment_id','').strip()
+    return year, int(apartment_id) if apartment_id.isdigit() else None
 
 @app.route('/export.csv')
 @login_required
 def export_csv():
-    con=get_db(); rows=db_execute(con, '''SELECT r.period,a.name AS apartment,s.name AS section,r.reading,r.previous_reading,
-        r.consumption,r.rate,r.amount_due,r.paid,r.paid_date,r.notes
-        FROM readings r JOIN sections s ON s.id=r.section_id JOIN apartments a ON a.id=s.apartment_id
-        ORDER BY r.period DESC,a.name,s.name''').fetchall(); con.close()
+    year,apartment_id=report_query_params(); rows,_=get_report_data(year,apartment_id)
     out=io.StringIO(); w=csv.writer(out,delimiter=';')
-    w.writerow(['Okres','Mieszkanie','Sekcja','Odczyt','Poprzedni','Zużycie','Stawka','Kwota','Zapłacono','Data zapłaty','Notatki'])
-    for r in rows: w.writerow(list(r))
-    return send_file(io.BytesIO(out.getvalue().encode('utf-8-sig')),mimetype='text/csv',as_attachment=True,download_name='oplaty.csv')
+    w.writerow(['Miesiąc','Mieszkanie','Sekcja','Jednostka','Odczyt','Poprzedni','Zużycie','Stawka','Kwota','Zapłacono','Data zapłaty','Status','Notatki'])
+    for r in rows:
+        w.writerow([r['period'],r['apartment'],r['section'],r['unit'],r['reading'] if r['reading'] is not None else '',r['previous_reading'] if r['previous_reading'] is not None else '',r['consumption'] if r['consumption'] is not None else '',r['rate'] if r['rate'] is not None else '',r['amount_due'] if r['reading_id'] else '','TAK' if r['paid'] else 'NIE',r['paid_date'] or '',r['status'],r['notes']])
+    fn=f'oplaty_{year}'+(f'_mieszkanie_{apartment_id}' if apartment_id else '')+'.csv'
+    return send_file(io.BytesIO(out.getvalue().encode('utf-8-sig')),mimetype='text/csv',as_attachment=True,download_name=fn)
+
+@app.route('/export.pdf')
+@login_required
+def export_pdf():
+    year,apartment_id=report_query_params(); rows,apartments=get_report_data(year,apartment_id)
+    try:
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.enums import TA_LEFT
+        from reportlab.lib.units import mm
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+    except ImportError: return 'Brak biblioteki reportlab.',500
+    reg='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'; bold='/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
+    rf,bf='Helvetica','Helvetica-Bold'
+    if Path(reg).exists() and Path(bold).exists():
+        pdfmetrics.registerFont(TTFont('AppSans',reg)); pdfmetrics.registerFont(TTFont('AppSansBold',bold)); rf,bf='AppSans','AppSansBold'
+    apt_name='Wszystkie mieszkania'
+    for a in apartments:
+        if apartment_id and int(a['id'])==apartment_id: apt_name=a['name']
+    buf=io.BytesIO(); doc=SimpleDocTemplate(buf,pagesize=landscape(A4),rightMargin=8*mm,leftMargin=8*mm,topMargin=10*mm,bottomMargin=10*mm,title=f'Raport OPŁAT {year}')
+    styles=getSampleStyleSheet(); title=ParagraphStyle('AppTitle',parent=styles['Title'],fontName=bf,fontSize=17,leading=20,alignment=TA_LEFT); small=ParagraphStyle('Small',parent=styles['BodyText'],fontName=rf,fontSize=7.5,leading=9); normal=ParagraphStyle('NormalApp',parent=styles['BodyText'],fontName=rf,fontSize=8,leading=10)
+    story=[Paragraph(f'OPŁATY — raport za rok {year}',title),Paragraph(f'Filtr: {apt_name}',normal),Spacer(1,5*mm)]
+    names=['Styczeń','Luty','Marzec','Kwiecień','Maj','Czerwiec','Lipiec','Sierpień','Wrzesień','Październik','Listopad','Grudzień']
+    for i,name in enumerate(names,1):
+        mr=[r for r in rows if r['period'].endswith(f'-{i:02d}')]
+        if not mr: continue
+        story.append(Paragraph(name.upper(),ParagraphStyle(f'M{i}',parent=normal,fontName=bf,fontSize=11,spaceBefore=4*mm,spaceAfter=2*mm)))
+        data=[['Mieszkanie','Sekcja','Odczyt','Zużycie','Kwota','Status']]
+        for r in mr: data.append([r['apartment'],r['section'],str(r['reading']) if r['reading'] is not None else '—',str(r['consumption']) if r['consumption'] is not None else '—',f"{r['amount_due']:.2f} zł" if r['reading_id'] else '—',r['status']])
+        t=Table(data,repeatRows=1,colWidths=[42*mm,43*mm,25*mm,25*mm,27*mm,55*mm]); t.setStyle(TableStyle([('FONTNAME',(0,0),(-1,-1),rf),('FONTNAME',(0,0),(-1,0),bf),('FONTSIZE',(0,0),(-1,-1),7.2),('BACKGROUND',(0,0),(-1,0),colors.HexColor('#e9e9e9')),('GRID',(0,0),(-1,-1),0.35,colors.HexColor('#bbbbbb')),('VALIGN',(0,0),(-1,-1),'MIDDLE'),('ROWBACKGROUNDS',(0,1),(-1,-1),[colors.white,colors.HexColor('#f7f7f7')])]))
+        story += [t,Paragraph(f"Suma: {sum(r['amount_due'] for r in mr if r['reading_id']):.2f} zł · Do zapłaty: {sum(r['amount_due'] for r in mr if r['reading_id'] and not r['paid']):.2f} zł · Brak wpisów: {sum(1 for r in mr if not r['reading_id'])}",small)]
+    doc.build(story); buf.seek(0); fn=f'oplaty_{year}'+(f'_mieszkanie_{apartment_id}' if apartment_id else '')+'.pdf'; return send_file(buf,mimetype='application/pdf',as_attachment=True,download_name=fn)
 
 
 init_db()
