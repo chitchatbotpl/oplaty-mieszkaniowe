@@ -899,24 +899,44 @@ def reminder_runner():
 @app.post('/reminders/<int:reminder_id>/test')
 @login_required
 def test_reminder(reminder_id):
-    con = get_db(); r = get_reminder(con, reminder_id, session['user_id'])
+    con = get_db()
+    r = get_reminder(con, reminder_id, session['user_id'])
+
     if not r:
-        con.close(); return 'Nie znaleziono przypomnienia', 404
+        con.close()
+        return 'Nie znaleziono przypomnienia', 404
+
     try:
-        content = reminder_content(con, r, current_period())
-        if content is None:
-            con.close(); flash('Test nie został wysłany: obecnie nie ma czego przypominać.')
-            return redirect(url_for('reminders'))
-        subject, html, text = content
-        result = send_brevo_email(session['email'], '[TEST] ' + subject, html, text)
-        con.close(); flash(f'Testowy e-mail przypomnienia został wysłany. ID wiadomości: {result.get("messageId","brak")}')
+        subject = '[TEST] OPŁATY — test przypomnienia'
+        text = (
+            'To jest testowa wiadomość z aplikacji OPŁATY.\n\n'
+            'Wysyłka e-maili przez Brevo działa poprawnie, '
+            'jeśli otrzymujesz tę wiadomość.'
+        )
+        html = """
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto">
+          <h2>OPŁATY — test przypomnienia</h2>
+          <p>To jest testowa wiadomość z aplikacji OPŁATY.</p>
+          <p>Jeśli otrzymujesz tę wiadomość, wysyłka e-maili przez Brevo działa poprawnie.</p>
+        </div>
+        """
+
+        result = send_brevo_email(
+            session['email'],
+            subject,
+            html,
+            text
+        )
+
+        flash(
+            'Testowy e-mail został wysłany. '
+            f'ID wiadomości: {result.get("messageId", "brak")}'
+        )
+
     except Exception as exc:
-        con.close(); flash(f'Nie udało się wysłać testu przypomnienia: {exc}')
+        flash(f'Nie udało się wysłać testu przypomnienia: {exc}')
+
+    finally:
+        con.close()
+
     return redirect(url_for('reminders'))
-
-
-init_db()
-ensure_admin_user()
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=False)
