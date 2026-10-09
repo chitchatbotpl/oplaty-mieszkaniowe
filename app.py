@@ -900,43 +900,68 @@ def reminder_runner():
 @login_required
 def test_reminder(reminder_id):
     con = get_db()
-    r = get_reminder(con, reminder_id, session['user_id'])
+    uid = session['user_id']
+    r = get_reminder(con, reminder_id, uid)
 
     if not r:
         con.close()
         return 'Nie znaleziono przypomnienia', 404
 
+    period = current_period()
+    subject = '[TEST] OPŁATY — test przypomnienia'
+    html = '''
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto">
+      <h2>OPŁATY — test przypomnienia</h2>
+      <p>To jest testowa wiadomość z aplikacji OPŁATY.</p>
+      <p>Jeśli ją otrzymujesz, wysyłka przez Brevo działa poprawnie.</p>
+    </div>
+    '''
+    text = (
+        'OPŁATY — test przypomnienia\n\n'
+        'To jest testowa wiadomość z aplikacji OPŁATY.\n'
+        'Wysyłka przez Brevo działa poprawnie.'
+    )
+
     try:
-        subject = '[TEST] OPŁATY — test przypomnienia'
-        text = (
-            'To jest testowa wiadomość z aplikacji OPŁATY.\n\n'
-            'Wysyłka e-maili przez Brevo działa poprawnie, '
-            'jeśli otrzymujesz tę wiadomość.'
-        )
-        html = """
-        <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto">
-          <h2>OPŁATY — test przypomnienia</h2>
-          <p>To jest testowa wiadomość z aplikacji OPŁATY.</p>
-          <p>Jeśli otrzymujesz tę wiadomość, wysyłka e-maili przez Brevo działa poprawnie.</p>
-        </div>
-        """
+        result = send_brevo_email(session['email'], subject, html, text)
+        message_id = result.get('messageId', '') if isinstance(result, dict) else ''
 
-        result = send_brevo_email(
-            session['email'],
-            subject,
-            html,
-            text
-        )
-
-        flash(
-            'Testowy e-mail został wysłany. '
-            f'ID wiadomości: {result.get("messageId", "brak")}'
-        )
+        db_execute(con, '''
+            INSERT INTO reminder_logs
+                (reminder_id, user_id, recipient_email, kind,
+                 period, subject, status, details)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            r['id'], uid, session['email'], r['kind'], period,
+            subject, 'sent', f'Test e-maila. ID wiadomości: {message_id}'
+        ))
+        con.commit()
+        flash('Testowy e-mail wysłany i zapisany w historii.')
 
     except Exception as exc:
-        flash(f'Nie udało się wysłać testu przypomnienia: {exc}')
-
+        con.rollback()
+        try:
+            db_execute(con, '''
+                INSERT INTO reminder_logs
+                    (reminder_id, user_id, recipient_email, kind,
+                     period, subject, status, details)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                r['id'], uid, session['email'], r['kind'], period,
+                subject, 'error', str(exc)
+            ))
+            con.commit()
+        except Exception:
+            con.rollback()
+        flash(f'Nie udało się wykonać testu: {exc}')
     finally:
         con.close()
 
     return redirect(url_for('reminders'))
+
+
+init_db()
+ensure_admin_user()
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=False)
