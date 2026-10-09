@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+{% block title %}Przypomnienia · OPŁATY{% endblock %}
+
+{% block content %}
+<style>
+  .reminders-page{max-width:1180px;margin:0 auto;padding:8px 0 28px}
+  .reminders-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+  .reminders-head h1{margin:0}
+  .reminders-grid{display:grid;grid-template-columns:minmax(280px,380px) minmax(0,1fr);gap:18px;align-items:start}
+  .rem-card{border:1px solid var(--border,#e2e8f0);border-radius:16px;padding:18px;background:var(--card,#fff);box-shadow:0 4px 18px rgba(15,23,42,.04);min-width:0}
+  .rem-card h2{margin:0 0 14px;font-size:1.12rem}
+  .rem-form{display:grid;gap:12px}
+  .rem-field{display:grid;gap:5px}
+  .rem-field label{font-size:.9rem;font-weight:650}
+  .rem-field input,.rem-field select{width:100%;box-sizing:border-box;padding:10px 11px;border:1px solid var(--border,#cbd5e1);border-radius:9px;background:var(--input-bg,#fff);color:inherit;font:inherit}
+  .rem-check{display:flex;align-items:center;gap:8px}
+  .rem-check input{width:auto}
+  .rem-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .rem-actions form{display:inline}
+  .rem-btn{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border,#cbd5e1);border-radius:9px;padding:8px 11px;background:var(--button-bg,#f8fafc);color:inherit;text-decoration:none;font:inherit;font-size:.9rem;cursor:pointer}
+  .rem-btn-primary{background:var(--primary,#2563eb);border-color:var(--primary,#2563eb);color:white}
+  .rem-btn-danger{color:#b91c1c}
+  .rem-muted{color:var(--muted,#64748b);font-size:.9rem}
+  .rem-list{display:grid;gap:12px}
+  .rem-item{border:1px solid var(--border,#e2e8f0);border-radius:12px;padding:14px}
+  .rem-item-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .rem-item-title{font-weight:750}
+  .rem-pill{display:inline-block;border-radius:999px;padding:4px 9px;font-size:.78rem;font-weight:700}
+  .rem-on{background:#dcfce7;color:#166534}.rem-off{background:#e2e8f0;color:#475569}
+  .rem-edit{margin-top:12px;border-top:1px solid var(--border,#e2e8f0);padding-top:12px}
+  .rem-edit summary{cursor:pointer;font-weight:650}
+  .rem-edit-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}
+  .rem-table-wrap{overflow-x:auto}
+  .rem-table{width:100%;border-collapse:collapse;font-size:.9rem}
+  .rem-table th,.rem-table td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--border,#e2e8f0);vertical-align:top}
+  .rem-table th{font-weight:750}
+  .rem-info{padding:12px 14px;border-radius:10px;background:var(--soft-bg,#f1f5f9);margin-top:14px;font-size:.9rem}
+  @media(max-width:850px){.reminders-grid{grid-template-columns:1fr}}
+  @media(max-width:520px){.rem-edit-grid{grid-template-columns:1fr}.rem-card{padding:14px}}
+</style>
+
+<div class="reminders-page">
+  <div class="reminders-head">
+    <div>
+      <h1>🔔 PRZYPOMNIENIA</h1>
+      <div class="rem-muted">Automatyczne e-maile o odczytach liczników i nieopłaconych pozycjach.</div>
+    </div>
+    <a class="rem-btn" href="{{ url_for('index') }}">← Panel główny</a>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="flash {{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <div class="reminders-grid">
+    <section class="rem-card">
+      <h2>➕ Dodaj przypomnienie</h2>
+      <form id="new-reminder-form" class="rem-form" method="post" action="{{ url_for('reminders') }}">
+        <div class="rem-field">
+          <label for="new-kind">Rodzaj przypomnienia</label>
+          <select id="new-kind" name="kind" required>
+            <option value="reading">Brak odczytu licznika</option>
+            <option value="payment">Nieopłacona pozycja</option>
+          </select>
+        </div>
+        <div class="rem-field">
+          <label for="new-apartment">Mieszkanie</label>
+          <select id="new-apartment" name="apartment_id" class="apartment-select">
+            <option value="">Wszystkie mieszkania</option>
+            {% for apartment in apartments %}
+              <option value="{{ apartment.id }}">{{ apartment.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="rem-field">
+          <label for="new-section">Sekcja / opłata</label>
+          <select id="new-section" name="section_id" class="section-select">
+            <option value="">Wszystkie sekcje</option>
+            {% for section in sections %}
+              <option value="{{ section.id }}" data-apartment-id="{{ section.apartment_id }}">{{ section.name }}</option>
+            {% endfor %}
+          </select>
+          <span class="rem-muted">Możesz wskazać całe mieszkanie albo jedną konkretną sekcję.</span>
+        </div>
+        <div class="rem-field">
+          <label for="new-day">Dzień miesiąca</label>
+          <input id="new-day" type="number" name="day_of_month" min="1" max="31" value="1" required>
+        </div>
+        <div class="rem-field">
+          <label for="new-time">Godzina wysyłki</label>
+          <input id="new-time" type="time" name="time_hm" value="08:00" required>
+        </div>
+        <div class="rem-field">
+          <label for="new-before">Ile dni wcześniej? (0 = w wybranym dniu)</label>
+          <input id="new-before" type="number" name="days_before" min="0" max="31" value="0" required>
+        </div>
+        <label class="rem-check"><input type="checkbox" name="active" value="1" checked> Przypomnienie aktywne</label>
+        <button class="rem-btn rem-btn-primary" type="submit">Zapisz przypomnienie</button>
+      </form>
+      <div class="rem-info">Wiadomości są wysyłane na adres e-mail konta użytkownika, który utworzył przypomnienie.</div>
+    </section>
+
+    <div class="rem-card">
+      <h2>📌 Skonfigurowane przypomnienia</h2>
+      {% if reminders %}
+        <div class="rem-list">
+          {% for reminder in reminders %}
+            <article class="rem-item">
+              <div class="rem-item-top">
+                <div>
+                  <div class="rem-item-title">
+                    {% if reminder.kind == 'reading' %}Odczyt licznika{% else %}Płatność{% endif %}
+                  </div>
+                  <div class="rem-muted">
+                    {% if reminder.apartment_name %}{{ reminder.apartment_name }}{% else %}Wszystkie mieszkania{% endif %}
+                    {% if reminder.section_name %} · {{ reminder.section_name }}{% endif %}
+                    · dzień {{ reminder.day_of_month }} · {{ reminder.time_hm }}
+                    {% if reminder.kind == 'payment' and reminder.days_before %} · {{ reminder.days_before }} dni wcześniej{% endif %}
+                  </div>
+                </div>
+                <span class="rem-pill {{ 'rem-on' if reminder.active else 'rem-off' }}">{{ 'AKTYWNE' if reminder.active else 'WYŁĄCZONE' }}</span>
+              </div>
+              <div class="rem-actions">
+                <form method="post" action="{{ url_for('toggle_reminder', reminder_id=reminder.id) }}">
+                  <button class="rem-btn" type="submit">{{ 'Wyłącz' if reminder.active else 'Włącz' }}</button>
+                </form>
+                <form method="post" action="{{ url_for('test_reminder', reminder_id=reminder.id) }}">
+                  <button class="rem-btn" type="submit">Wyślij test</button>
+                </form>
+                <form method="post" action="{{ url_for('delete_reminder', reminder_id=reminder.id) }}" onsubmit="return confirm('Usunąć to przypomnienie? Historia wysyłek pozostanie w logach.');">
+                  <button class="rem-btn rem-btn-danger" type="submit">Usuń</button>
+                </form>
+              </div>
+              <details class="rem-edit">
+                <summary>Edytuj ustawienia</summary>
+                <form class="rem-form rem-edit-form" method="post" action="{{ url_for('edit_reminder', reminder_id=reminder.id) }}">
+                  <div class="rem-edit-grid">
+                    <div class="rem-field">
+                      <label>Rodzaj</label>
+                      <select name="kind" required>
+                        <option value="reading" {{ 'selected' if reminder.kind == 'reading' else '' }}>Brak odczytu</option>
+                        <option value="payment" {{ 'selected' if reminder.kind == 'payment' else '' }}>Nieopłacona pozycja</option>
+                      </select>
+                    </div>
+                    <div class="rem-field">
+                      <label>Mieszkanie</label>
+                      <select name="apartment_id" class="apartment-select">
+                        <option value="">Wszystkie mieszkania</option>
+                        {% for apartment in apartments %}
+                          <option value="{{ apartment.id }}" {{ 'selected' if reminder.apartment_id == apartment.id else '' }}>{{ apartment.name }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                    <div class="rem-field">
+                      <label>Sekcja / opłata</label>
+                      <select name="section_id" class="section-select">
+                        <option value="">Wszystkie sekcje</option>
+                        {% for section in sections %}
+                          <option value="{{ section.id }}" data-apartment-id="{{ section.apartment_id }}" {{ 'selected' if reminder.section_id == section.id else '' }}>{{ section.name }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                    <div class="rem-field">
+                      <label>Dzień miesiąca</label>
+                      <input type="number" name="day_of_month" min="1" max="31" value="{{ reminder.day_of_month }}" required>
+                    </div>
+                    <div class="rem-field">
+                      <label>Godzina</label>
+                      <input type="time" name="time_hm" value="{{ reminder.time_hm }}" required>
+                    </div>
+                    <div class="rem-field">
+                      <label>Dni wcześniej</label>
+                      <input type="number" name="days_before" min="0" max="31" value="{{ reminder.days_before }}" required>
+                    </div>
+                  </div>
+                  <label class="rem-check"><input type="checkbox" name="active" value="1" {{ 'checked' if reminder.active else '' }}> Przypomnienie aktywne</label>
+                  <button class="rem-btn rem-btn-primary" type="submit">Zapisz zmiany</button>
+                </form>
+              </details>
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="rem-muted">Nie masz jeszcze skonfigurowanych przypomnień. Dodaj pierwsze formularzem obok.</p>
+      {% endif %}
+      <div class="rem-info"><strong>Automatyczna wysyłka:</strong> zewnętrzny harmonogram uruchamia sprawdzanie przypomnień co kilka minut. Samo zapisanie przypomnienia nie wysyła od razu wiadomości.</div>
+    </div>
+  </div>
+
+  <section class="rem-card" style="margin-top:18px">
+    <h2>🕘 Historia wysyłek (reminder_logs)</h2>
+    {% if logs %}
+      <div class="rem-table-wrap">
+        <table class="rem-table">
+          <thead><tr><th>Data</th><th>Odbiorca</th><th>Rodzaj</th><th>Okres</th><th>Temat</th><th>Status</th><th>Szczegóły</th></tr></thead>
+          <tbody>
+          {% for log in logs %}
+            <tr>
+              <td>{{ log.sent_at }}</td>
+              <td>{{ log.recipient_email }}</td>
+              <td>{{ 'Odczyt' if log.kind == 'reading' else 'Płatność' }}</td>
+              <td>{{ log.period }}</td>
+              <td>{{ log.subject }}</td>
+              <td>{{ log.status }}</td>
+              <td>{{ log.details or '—' }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="rem-muted">Historia jest pusta. Pojawią się tu wpisy po pierwszych próbach wysyłki.</p>
+    {% endif %}
+  </section>
+</div>
+
+<script>
+(function () {
+  function filterSections(form) {
+    const apartment = form.querySelector('.apartment-select');
+    const section = form.querySelector('.section-select');
+    if (!apartment || !section) return;
+    function update() {
+      const apartmentId = apartment.value;
+      Array.from(section.options).forEach(function (option) {
+        if (!option.value) { option.hidden = false; return; }
+        const belongsTo = option.dataset.apartmentId || '';
+        option.hidden = !!apartmentId && belongsTo !== apartmentId;
+        if (option.hidden && option.selected) section.value = '';
+      });
+    }
+    apartment.addEventListener('change', update);
+    update();
+  }
+  document.querySelectorAll('#new-reminder-form, .rem-edit-form').forEach(filterSections);
+})();
+</script>
+{% endblock %}
