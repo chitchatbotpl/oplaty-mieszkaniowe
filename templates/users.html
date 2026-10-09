@@ -1,5 +1,22 @@
 {% extends 'base.html' %}
 {% block content %}
+<style>
+  /* Odstęp między kartami „Dodaj użytkownika” i „Istniejące konta”. */
+  .user-admin-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px;
+    align-items: start;
+  }
+
+  @media (max-width: 760px) {
+    .user-admin-grid {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 18px;
+    }
+  }
+</style>
+
 <section class="hero">
   <div>
     <div class="eyebrow">ADMINISTRACJA</div>
@@ -34,11 +51,11 @@
       {% for user in users %}
       <div class="user-row">
         <div>
-          <strong>{{user.email}}</strong>
+          <strong>{{ user.email }}</strong>
           <small>{{ 'Administrator' if user.role == 'admin' else 'Użytkownik' }}</small>
         </div>
         {% if user.id != session.get('user_id') %}
-        <form method="post" action="{{url_for('delete_user', user_id=user.id)}}" onsubmit="return confirm('Usunąć konto {{user.email}}?');">
+        <form method="post" action="{{ url_for('delete_user', user_id=user.id) }}" onsubmit="return confirm('Usunąć konto {{ user.email }}?');">
           <button class="btn danger" type="submit">Usuń</button>
         </form>
         {% else %}
