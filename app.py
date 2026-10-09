@@ -104,7 +104,7 @@ def db_script_init(con):
                 consumption DOUBLE PRECISION, rate DOUBLE PRECISION,
                 amount_due DOUBLE PRECISION NOT NULL DEFAULT 0,
                 paid INTEGER NOT NULL DEFAULT 0, paid_date DATE,
-                notes TEXT DEFAULT '',
+                payment_due_date DATE, notes TEXT DEFAULT '',
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(section_id, period))""",
             """CREATE TABLE IF NOT EXISTS users (
@@ -120,6 +120,9 @@ def db_script_init(con):
                 kind TEXT NOT NULL, day_of_month INTEGER NOT NULL DEFAULT 1,
                 time_hm TEXT NOT NULL DEFAULT '08:00',
                 days_before INTEGER NOT NULL DEFAULT 0,
+                schedule_mode TEXT NOT NULL DEFAULT 'fixed',
+                reading_id INTEGER REFERENCES readings(id) ON DELETE SET NULL,
+                payment_due_date DATE,
                 active INTEGER NOT NULL DEFAULT 1, last_sent_key TEXT,
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 CHECK(kind IN ('reading','payment')),
@@ -158,7 +161,7 @@ def db_script_init(con):
             id INTEGER PRIMARY KEY AUTOINCREMENT, section_id INTEGER NOT NULL,
             period TEXT NOT NULL, reading REAL, previous_reading REAL,
             consumption REAL, rate REAL, amount_due REAL NOT NULL DEFAULT 0,
-            paid INTEGER NOT NULL DEFAULT 0, paid_date TEXT, notes TEXT DEFAULT '',
+            paid INTEGER NOT NULL DEFAULT 0, paid_date TEXT, payment_due_date TEXT, notes TEXT DEFAULT '',
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(section_id, period),
             FOREIGN KEY(section_id) REFERENCES sections(id) ON DELETE CASCADE);
@@ -173,11 +176,15 @@ def db_script_init(con):
             day_of_month INTEGER NOT NULL DEFAULT 1,
             time_hm TEXT NOT NULL DEFAULT '08:00',
             days_before INTEGER NOT NULL DEFAULT 0,
+            schedule_mode TEXT NOT NULL DEFAULT 'fixed',
+            reading_id INTEGER,
+            payment_due_date TEXT,
             active INTEGER NOT NULL DEFAULT 1, last_sent_key TEXT,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
             FOREIGN KEY(apartment_id) REFERENCES apartments(id) ON DELETE CASCADE,
-            FOREIGN KEY(section_id) REFERENCES sections(id) ON DELETE CASCADE);
+            FOREIGN KEY(section_id) REFERENCES sections(id) ON DELETE CASCADE,
+            FOREIGN KEY(reading_id) REFERENCES readings(id) ON DELETE SET NULL);
         CREATE TABLE IF NOT EXISTS reminder_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT, reminder_id INTEGER,
             user_id INTEGER, recipient_email TEXT NOT NULL,
@@ -192,6 +199,23 @@ def db_script_init(con):
         CREATE INDEX IF NOT EXISTS idx_reminder_logs_period
             ON reminder_logs(period, user_id);
         """)
+    # Bezpieczne migracje: dodają nowe pola bez usuwania istniejących danych.
+    if using_postgres():
+        con.execute("ALTER TABLE readings ADD COLUMN IF NOT EXISTS payment_due_date DATE")
+        con.execute("ALTER TABLE reminders ADD COLUMN IF NOT EXISTS schedule_mode TEXT NOT NULL DEFAULT 'fixed'")
+        con.execute("ALTER TABLE reminders ADD COLUMN IF NOT EXISTS reading_id INTEGER REFERENCES readings(id) ON DELETE SET NULL")
+        con.execute("ALTER TABLE reminders ADD COLUMN IF NOT EXISTS payment_due_date DATE")
+    else:
+        reading_columns = {row['name'] for row in con.execute("PRAGMA table_info(readings)").fetchall()}
+        if 'payment_due_date' not in reading_columns:
+            con.execute("ALTER TABLE readings ADD COLUMN payment_due_date TEXT")
+        reminder_columns = {row['name'] for row in con.execute("PRAGMA table_info(reminders)").fetchall()}
+        if 'schedule_mode' not in reminder_columns:
+            con.execute("ALTER TABLE reminders ADD COLUMN schedule_mode TEXT NOT NULL DEFAULT 'fixed'")
+        if 'reading_id' not in reminder_columns:
+            con.execute("ALTER TABLE reminders ADD COLUMN reading_id INTEGER REFERENCES readings(id) ON DELETE SET NULL")
+        if 'payment_due_date' not in reminder_columns:
+            con.execute("ALTER TABLE reminders ADD COLUMN payment_due_date TEXT")
 
 
 def ensure_admin_user():
@@ -439,7 +463,7 @@ def apartment_detail(apartment_id):
     month = request.args.get('month') or current_period()
     sections = db_execute(con, '''
         SELECT s.*, r.id AS reading_id, r.period, r.reading, r.previous_reading,
-               r.consumption, r.rate, r.amount_due, r.paid, r.paid_date,
+               r.consumption, r.rate, r.amount_due, r.paid, r.paid_date, r.payment_due_date,
                r.notes AS reading_notes
         FROM sections s LEFT JOIN readings r ON r.section_id=s.id AND r.period=?
         WHERE s.apartment_id=? AND s.active=1 ORDER BY s.name
@@ -513,10 +537,10 @@ def new_reading(section_id):
         rate = float(f['rate']) if f.get('rate') else None
         amount = float(f.get('amount_due') or 0)
         try:
-            db_execute(con, '''INSERT INTO readings(section_id,period,reading,previous_reading,consumption,rate,amount_due,paid,paid_date,notes)
-                               VALUES (?,?,?,?,?,?,?,?,?,?)''',
+            db_execute(con, '''INSERT INTO readings(section_id,period,reading,previous_reading,consumption,rate,amount_due,paid,paid_date,payment_due_date,notes)
+                               VALUES (?,?,?,?,?,?,?,?,?,?,?)''',
                        (section_id, f['period'], reading, previous, consumption, rate, amount,
-                        1 if f.get('paid') == 'on' else 0, f.get('paid_date') or None, f.get('notes','')))
+                        1 if f.get('paid') == 'on' else 0, f.get('paid_date') or None, f.get('payment_due_date') or None, f.get('notes','')))
             con.commit()
         except Exception:
             con.rollback()
@@ -541,10 +565,10 @@ def edit_reading(reading_id):
         current = float(f['reading']) if f.get('reading') else None
         previous = float(f['previous_reading']) if f.get('previous_reading') else None
         consumption = float(f['consumption']) if f.get('consumption') else (current - previous if current is not None and previous is not None else None)
-        db_execute(con, '''UPDATE readings SET period=?, reading=?, previous_reading=?, consumption=?, rate=?, amount_due=?, paid=?, paid_date=?, notes=? WHERE id=?''',
+        db_execute(con, '''UPDATE readings SET period=?, reading=?, previous_reading=?, consumption=?, rate=?, amount_due=?, paid=?, paid_date=?, payment_due_date=?, notes=? WHERE id=?''',
                    (f['period'], current, previous, consumption, float(f['rate']) if f.get('rate') else None,
                     float(f.get('amount_due') or 0), 1 if f.get('paid') == 'on' else 0,
-                    f.get('paid_date') or None, f.get('notes',''), reading_id))
+                    f.get('paid_date') or None, f.get('payment_due_date') or None, f.get('notes',''), reading_id))
         con.commit()
         con.close()
         return redirect(url_for('apartment_detail', apartment_id=reading['apartment_id'], month=f['period']))
@@ -722,27 +746,81 @@ def get_reminder(con, reminder_id, user_id=None):
 
 def parse_reminder_form(form):
     kind = form.get('kind', 'reading')
-    if kind not in ('reading', 'payment'): kind = 'reading'
-    a, s = form.get('apartment_id','').strip(), form.get('section_id','').strip()
-    try: day = max(1, min(31, int(form.get('day_of_month','1'))))
-    except ValueError: day = 1
-    tm = form.get('time_hm','08:00').strip()
-    try: datetime.strptime(tm, '%H:%M')
-    except ValueError: tm = '08:00'
-    try: before = max(0, min(31, int(form.get('days_before','0'))))
-    except ValueError: before = 0
-    return {'kind':kind, 'apartment_id':int(a) if a.isdigit() else None,
-            'section_id':int(s) if s.isdigit() else None, 'day_of_month':day,
-            'time_hm':tm, 'days_before':before, 'active':1 if form.get('active') == 'on' else 0}
+    if kind not in ('reading', 'payment'):
+        kind = 'reading'
+    a, s = form.get('apartment_id', '').strip(), form.get('section_id', '').strip()
+    try:
+        day = max(1, min(31, int(form.get('day_of_month', '1'))))
+    except ValueError:
+        day = 1
+    tm = form.get('time_hm', '08:00').strip()
+    try:
+        datetime.strptime(tm, '%H:%M')
+    except ValueError:
+        tm = '08:00'
+    try:
+        before = max(0, min(31, int(form.get('days_before', '0'))))
+    except ValueError:
+        before = 0
+    schedule_mode = form.get('schedule_mode', 'fixed')
+    if schedule_mode not in ('fixed', 'due_date'):
+        schedule_mode = 'fixed'
+    reading_value = form.get('reading_id', '').strip()
+    reading_id = int(reading_value) if reading_value.isdigit() else None
+    payment_due_date = form.get('payment_due_date', '').strip() or None
+    if kind != 'payment':
+        schedule_mode, reading_id, payment_due_date = 'fixed', None, None
+    return {
+        'kind': kind, 'apartment_id': int(a) if a.isdigit() else None,
+        'section_id': int(s) if s.isdigit() else None, 'day_of_month': day,
+        'time_hm': tm, 'days_before': before, 'schedule_mode': schedule_mode,
+        'reading_id': reading_id, 'payment_due_date': payment_due_date,
+        'active': 1 if form.get('active') == 'on' else 0
+    }
 
 
-def validate_reminder_target(con, apartment_id, section_id):
+def apply_linked_reading_scope(con, values):
+    if values['kind'] == 'payment' and values['schedule_mode'] == 'due_date' and values['reading_id']:
+        row = db_execute(con, '''SELECT r.section_id,s.apartment_id
+            FROM readings r JOIN sections s ON s.id=r.section_id WHERE r.id=?''',
+            (values['reading_id'],)).fetchone()
+        if row:
+            values['section_id'] = row['section_id']
+            values['apartment_id'] = row['apartment_id']
+    return values
+
+
+def validate_reminder_target(con, values):
+    apartment_id = values['apartment_id']
+    section_id = values['section_id']
     if apartment_id and not db_execute(con, 'SELECT id FROM apartments WHERE id=? AND active=1', (apartment_id,)).fetchone():
-        return False, 'Wybrane mieszkanie nie istnieje.'
+        return False, 'Wybrany obszar opłat nie istnieje.'
     if section_id:
         sec = db_execute(con, 'SELECT id,apartment_id FROM sections WHERE id=? AND active=1', (section_id,)).fetchone()
-        if not sec: return False, 'Wybrana sekcja nie istnieje.'
-        if apartment_id and int(sec['apartment_id']) != int(apartment_id): return False, 'Sekcja nie należy do wybranego mieszkania.'
+        if not sec:
+            return False, 'Wybrana pozycja opłat nie istnieje.'
+        if apartment_id and int(sec['apartment_id']) != int(apartment_id):
+            return False, 'Pozycja opłat nie należy do wybranego obszaru.'
+    if values['kind'] == 'payment' and values['schedule_mode'] == 'due_date':
+        if values['reading_id']:
+            reading = db_execute(con, '''SELECT r.id, r.section_id, r.payment_due_date, s.apartment_id
+                FROM readings r JOIN sections s ON s.id=r.section_id WHERE r.id=?''',
+                (values['reading_id'],)).fetchone()
+            if not reading:
+                return False, 'Wybrany odczyt nie istnieje.'
+            if not reading['payment_due_date']:
+                return False, 'Wybrany odczyt nie ma ustawionego terminu płatności.'
+            if section_id and int(section_id) != int(reading['section_id']):
+                return False, 'Wybrany odczyt nie należy do wskazanej pozycji opłat.'
+            if apartment_id and int(apartment_id) != int(reading['apartment_id']):
+                return False, 'Wybrany odczyt nie należy do wskazanego obszaru opłat.'
+        elif not values['payment_due_date']:
+            return False, 'Wybierz odczyt z terminem płatności albo wpisz termin płatności bezpośrednio w przypomnieniu.'
+        else:
+            try:
+                date.fromisoformat(values['payment_due_date'])
+            except ValueError:
+                return False, 'Termin płatności ma nieprawidłowy format.'
     return True, ''
 
 
@@ -751,13 +829,13 @@ def validate_reminder_target(con, apartment_id, section_id):
 def reminders():
     con = get_db(); uid = session['user_id']
     if request.method == 'POST':
-        v = parse_reminder_form(request.form)
-        ok, msg = validate_reminder_target(con, v['apartment_id'], v['section_id'])
+        v = apply_linked_reading_scope(con, parse_reminder_form(request.form))
+        ok, msg = validate_reminder_target(con, v)
         if not ok:
             flash(msg)
         else:
-            db_execute(con, '''INSERT INTO reminders(user_id,apartment_id,section_id,kind,day_of_month,time_hm,days_before,active)
-                               VALUES (?,?,?,?,?,?,?,?)''', (uid,v['apartment_id'],v['section_id'],v['kind'],v['day_of_month'],v['time_hm'],v['days_before'],v['active']))
+            db_execute(con, '''INSERT INTO reminders(user_id,apartment_id,section_id,kind,day_of_month,time_hm,days_before,schedule_mode,reading_id,payment_due_date,active)
+                               VALUES (?,?,?,?,?,?,?,?,?,?,?)''', (uid,v['apartment_id'],v['section_id'],v['kind'],v['day_of_month'],v['time_hm'],v['days_before'],v['schedule_mode'],v['reading_id'],v['payment_due_date'],v['active']))
             con.commit(); flash('Przypomnienie zostało dodane.')
     rows = db_execute(con, '''SELECT r.*,a.name AS apartment_name,s.name AS section_name,s.unit AS section_unit
         FROM reminders r LEFT JOIN apartments a ON a.id=r.apartment_id LEFT JOIN sections s ON s.id=r.section_id
@@ -765,11 +843,16 @@ def reminders():
     apartments_rows = db_execute(con, 'SELECT id,name FROM apartments WHERE active=1 ORDER BY name').fetchall()
     sections_rows = db_execute(con, '''SELECT s.id,s.name,s.unit,s.apartment_id,a.name AS apartment_name
         FROM sections s JOIN apartments a ON a.id=s.apartment_id WHERE s.active=1 AND a.active=1 ORDER BY a.name,s.name''').fetchall()
+    reading_options = db_execute(con, '''SELECT r.id,r.period,r.payment_due_date,r.amount_due,r.paid,
+        s.id AS section_id,s.name AS section_name,s.apartment_id,a.name AS apartment_name
+        FROM readings r JOIN sections s ON s.id=r.section_id JOIN apartments a ON a.id=s.apartment_id
+        WHERE s.active=1 AND a.active=1 AND r.payment_due_date IS NOT NULL
+        ORDER BY r.payment_due_date DESC,a.name,s.name,r.period DESC''').fetchall()
     logs = db_execute(con, '''SELECT l.*,a.name AS apartment_name,s.name AS section_name FROM reminder_logs l
         LEFT JOIN reminders r ON r.id=l.reminder_id LEFT JOIN apartments a ON a.id=r.apartment_id
         LEFT JOIN sections s ON s.id=r.section_id WHERE l.user_id=? ORDER BY l.sent_at DESC LIMIT 50''', (uid,)).fetchall()
     con.close()
-    return render_template('reminders.html', reminders=rows, apartments=apartments_rows, sections=sections_rows, logs=logs)
+    return render_template('reminders.html', reminders=rows, apartments=apartments_rows, sections=sections_rows, reading_options=reading_options, logs=logs)
 
 
 @app.post('/reminders/<int:reminder_id>/edit')
@@ -778,12 +861,12 @@ def edit_reminder(reminder_id):
     con = get_db(); uid = session['user_id']
     if not get_reminder(con, reminder_id, uid):
         con.close(); return 'Nie znaleziono przypomnienia', 404
-    v = parse_reminder_form(request.form)
-    ok, msg = validate_reminder_target(con, v['apartment_id'], v['section_id'])
+    v = apply_linked_reading_scope(con, parse_reminder_form(request.form))
+    ok, msg = validate_reminder_target(con, v)
     if not ok:
         con.close(); flash(msg); return redirect(url_for('reminders'))
-    db_execute(con, '''UPDATE reminders SET apartment_id=?,section_id=?,kind=?,day_of_month=?,time_hm=?,days_before=?,active=?
-                       WHERE id=? AND user_id=?''', (v['apartment_id'],v['section_id'],v['kind'],v['day_of_month'],v['time_hm'],v['days_before'],v['active'],reminder_id,uid))
+    db_execute(con, '''UPDATE reminders SET apartment_id=?,section_id=?,kind=?,day_of_month=?,time_hm=?,days_before=?,schedule_mode=?,reading_id=?,payment_due_date=?,active=?
+                       WHERE id=? AND user_id=?''', (v['apartment_id'],v['section_id'],v['kind'],v['day_of_month'],v['time_hm'],v['days_before'],v['schedule_mode'],v['reading_id'],v['payment_due_date'],v['active'],reminder_id,uid))
     con.commit(); con.close(); flash('Przypomnienie zostało zapisane.')
     return redirect(url_for('reminders'))
 
@@ -807,13 +890,38 @@ def delete_reminder(reminder_id):
     return redirect(url_for('reminders'))
 
 
-def reminder_due_now(r, now):
-    try: h, m = map(int, str(r['time_hm']).split(':'))
-    except Exception: h, m = 8, 0
-    if now < now.replace(hour=h, minute=m, second=0, microsecond=0): return False
+def reminder_due_now(r, now, payment_due_date=None):
+    try:
+        h, m = map(int, str(r['time_hm']).split(':'))
+    except Exception:
+        h, m = 8, 0
+    if now < now.replace(hour=h, minute=m, second=0, microsecond=0):
+        return False
+    if r['kind'] == 'payment' and r['schedule_mode'] == 'due_date':
+        if not payment_due_date:
+            return False
+        return now.date() == payment_due_date - timedelta(days=int(r['days_before'] or 0))
     last = monthrange(now.year, now.month)[1]
     due = date(now.year, now.month, min(int(r['day_of_month']), last))
     return now.date() == due - timedelta(days=int(r['days_before'] or 0))
+
+
+def reminder_payment_due_date(con, reminder):
+    if reminder['kind'] != 'payment' or reminder['schedule_mode'] != 'due_date':
+        return None
+    if reminder['reading_id']:
+        row = db_execute(con, 'SELECT payment_due_date FROM readings WHERE id=?', (reminder['reading_id'],)).fetchone()
+        value = row['payment_due_date'] if row else None
+    else:
+        value = reminder['payment_due_date']
+    if not value:
+        return None
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return None
 
 
 def reminder_sections(con, r):
@@ -846,42 +954,72 @@ def reminder_content(con, r, period):
     if not unpaid: return None
     total = sum(float(rm[s['id']]['amount_due'] or 0) for s in unpaid)
     subject = f'OPŁATY — przypomnienie o płatności ({period})'
-    items = ''.join(f"<li><strong>{s['apartment_name']}</strong> — {s['name']}: <strong>{float(rm[s['id']]['amount_due'] or 0):.2f} zł</strong></li>" for s in unpaid)
+    items = ''.join(
+        f"<li><strong>{s['apartment_name']}</strong> — {s['name']}: <strong>{float(rm[s['id']]['amount_due'] or 0):.2f} zł</strong>"
+        + (f" — termin płatności: {rm[s['id']]['payment_due_date']}" if rm[s['id']]['payment_due_date'] else "")
+        + "</li>" for s in unpaid
+    )
     html = f'''<html><body style="font-family:Arial;line-height:1.5"><h2>OPŁATY</h2>
     <p>Przypomnienie o nieopłaconych należnościach za <strong>{period}</strong>.</p><ul>{items}</ul>
     <p><strong>Razem do zapłaty: {total:.2f} zł</strong></p><p>Wiadomość automatyczna z aplikacji OPŁATY.</p></body></html>'''
-    text = 'OPŁATY — przypomnienie o płatności\n\nMiesiąc: ' + period + '\n\n' + '\n'.join(f"- {s['apartment_name']} — {s['name']}: {float(rm[s['id']]['amount_due'] or 0):.2f} zł" for s in unpaid) + f'\n\nRazem do zapłaty: {total:.2f} zł'
+    text_items = []
+    for s in unpaid:
+        line = f"- {s['apartment_name']} — {s['name']}: {float(rm[s['id']]['amount_due'] or 0):.2f} zł"
+        if rm[s['id']]['payment_due_date']:
+            line += f" — termin płatności: {rm[s['id']]['payment_due_date']}"
+        text_items.append(line)
+    text = 'OPŁATY — przypomnienie o płatności\n\nMiesiąc: ' + period + '\n\n' + '\n'.join(text_items) + f'\n\nRazem do zapłaty: {total:.2f} zł'
     return subject, html, text
 
 
 def run_reminders():
-    now = now_local(); period = now.strftime('%Y-%m'); con = get_db()
+    now = now_local()
+    current_month = now.strftime('%Y-%m')
+    con = get_db()
     rows = db_execute(con, '''SELECT r.*,u.email AS user_email,u.active AS user_active FROM reminders r
         JOIN users u ON u.id=r.user_id WHERE r.active=1 AND u.active=1 ORDER BY r.id''').fetchall()
     sent = skipped = failed = 0
     for r in rows:
-        if not reminder_due_now(r, now): continue
-        key = f'{period}:{now.date().isoformat()}'
+        due_date = reminder_payment_due_date(con, r)
+        if not reminder_due_now(r, now, due_date):
+            continue
+        reminder_period = current_month
+        if r['kind'] == 'payment' and r['schedule_mode'] == 'due_date':
+            if r['reading_id']:
+                reading_period = db_execute(con, 'SELECT period FROM readings WHERE id=?', (r['reading_id'],)).fetchone()
+                if reading_period:
+                    reminder_period = reading_period['period']
+            elif due_date:
+                reminder_period = due_date.strftime('%Y-%m')
+        if r['schedule_mode'] == 'due_date' and r['kind'] == 'payment':
+            key = f"due:{due_date.isoformat()}:{now.date().isoformat()}"
+        else:
+            key = f'{reminder_period}:{now.date().isoformat()}'
         if r['last_sent_key'] == key:
-            skipped += 1; continue
+            skipped += 1
+            continue
         try:
-            content = reminder_content(con, r, period)
+            content = reminder_content(con, r, reminder_period)
             if content is None:
-                skipped += 1; continue
+                skipped += 1
+                continue
             subject, html, text = content
             result = send_brevo_email(r['user_email'], subject, html, text)
-            message_id = result.get('messageId','') if isinstance(result, dict) else ''
+            message_id = result.get('messageId', '') if isinstance(result, dict) else ''
             db_execute(con, '''INSERT INTO reminder_logs(reminder_id,user_id,recipient_email,kind,period,subject,status,details)
-                VALUES (?,?,?,?,?,?,?,?)''', (r['id'],r['user_id'],r['user_email'],r['kind'],period,subject,'sent',message_id))
+                VALUES (?,?,?,?,?,?,?,?)''', (r['id'],r['user_id'],r['user_email'],r['kind'],reminder_period,subject,'sent',message_id))
             db_execute(con, 'UPDATE reminders SET last_sent_key=? WHERE id=?', (key,r['id']))
-            con.commit(); sent += 1
+            con.commit()
+            sent += 1
         except Exception as exc:
-            con.rollback(); failed += 1
+            con.rollback()
+            failed += 1
             try:
                 db_execute(con, '''INSERT INTO reminder_logs(reminder_id,user_id,recipient_email,kind,period,subject,status,details)
-                    VALUES (?,?,?,?,?,?,?,?)''', (r['id'],r['user_id'],r['user_email'],r['kind'],period,'Błąd wysyłki — '+r['kind'],'error',str(exc)))
+                    VALUES (?,?,?,?,?,?,?,?)''', (r['id'],r['user_id'],r['user_email'],r['kind'],reminder_period,'Błąd wysyłki — '+r['kind'],'error',str(exc)))
                 con.commit()
-            except Exception: con.rollback()
+            except Exception:
+                con.rollback()
     con.close()
     return {'checked':len(rows),'sent':sent,'skipped':skipped,'failed':failed}
 
