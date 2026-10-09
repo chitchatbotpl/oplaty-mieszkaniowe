@@ -20,4 +20,32 @@
 <label>Notatki<textarea name="notes">{{reading.notes if reading else ''}}</textarea></label>
 <button class="btn primary">Zapisz odczyt</button>
 </form>
+
+{% if reading %}
+<section class="cardbox" style="margin-top:18px">
+  <h2 style="margin-top:0">🔔 Przypomnienia powiązane z tym odczytem</h2>
+  {% if reading_reminders %}
+    <div style="display:grid;gap:10px">
+      {% for reminder in reading_reminders %}
+        <div style="border:1px solid var(--border,#e2e8f0);border-radius:10px;padding:12px">
+          <strong>{% if reminder.kind == 'payment' %}Przypomnienie o płatności{% else %}Przypomnienie o odczycie{% endif %}</strong>
+          <span style="display:inline-block;margin-left:8px;padding:3px 8px;border-radius:999px;background:{{ '#dcfce7' if reminder.active else '#e2e8f0' }};color:{{ '#166534' if reminder.active else '#475569' }};font-size:.8rem;font-weight:700">{{ 'AKTYWNE' if reminder.active else 'WYŁĄCZONE' }}</span>
+          <div class="muted" style="margin-top:6px">
+            {% if reminder.kind == 'payment' and reminder.schedule_mode == 'due_date' %}
+              Termin płatności: {{ reading.payment_due_date or reminder.payment_due_date or 'nie ustawiono' }} · {{ reminder.days_before }} dni wcześniej
+            {% else %}
+              Dzień miesiąca: {{ reminder.day_of_month }} · {{ reminder.days_before }} dni wcześniej
+            {% endif %}
+            · godz. {{ reminder.time_hm }}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="muted">Nie ma jeszcze przypomnień bezpośrednio powiązanych z tym odczytem.</p>
+    <p class="muted">Aby dodać takie przypomnienie, przejdź do sekcji <strong>Przypomnienia</strong>, wybierz rodzaj „Płatność”, tryb „Na podstawie terminu płatności”, a następnie wskaż ten odczyt.</p>
+  {% endif %}
+  <p style="margin-bottom:0;margin-top:12px"><a href="{{ url_for('reminders') }}">Przejdź do zarządzania przypomnieniami →</a></p>
+</section>
+{% endif %}
 {% endblock %}
