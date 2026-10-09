@@ -1,30 +1,61 @@
+
 <!doctype html>
 <html lang="pl">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>OPŁATY</title>
-  <link rel="stylesheet" href="{{ url_for('static',filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 <header>
   <div class="wrap nav">
-    <a class="brand" href="{{ url_for('index') }}"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" role="img" aria-hidden="true"><path d="M3.5 10.5 12 3l8.5 7.5V20a1 1 0 0 1-1 1h-5v-5h-5v5h-5a1 1 0 0 1-1-1v-9.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M2.8 10.8 12 2.7l9.2 8.1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>OPŁATY</span><span class="brand-sub">· zarządzanie mieszkaniami i rachunkami</span></a>
+    <a class="brand" href="{{ url_for('index') }}">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" role="img" aria-hidden="true">
+          <path d="M3.5 10.5 12 3l8.5 7.5V20a1 1 0 0 1-1 1h-5v-5h-5v5h-5a1 1 0 0 1-1-1v-9.5Z"
+                fill="none" stroke="currentColor" stroke-width="1.8"
+                stroke-linejoin="round"/>
+          <path d="M2.8 10.8 12 2.7l9.2 8.1"
+                fill="none" stroke="currentColor" stroke-width="1.8"
+                stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <span>OPŁATY</span>
+    </a>
+
     <nav>
       <a href="{{ url_for('index') }}">Panel główny</a>
       <a href="{{ url_for('reports') }}">Raporty</a>
-      {% if current_user_role == 'admin' %}<a href="{{ url_for('users') }}">Użytkownicy</a>{% endif %}
-      {% if current_user_email %}<a href="{{ url_for('logout') }}">Wyloguj ({{ current_user_email }})</a>{% endif %}
+
+      {% if current_user_email %}
+        <a href="{{ url_for('reminders') }}">Przypomnienia</a>
+      {% endif %}
+
+      {% if current_user_role == 'admin' %}
+        <a href="{{ url_for('users') }}">Użytkownicy</a>
+      {% endif %}
+
+      {% if current_user_email %}
+        <a href="{{ url_for('logout') }}">Wyloguj ({{ current_user_email }})</a>
+      {% endif %}
     </nav>
   </div>
 </header>
+
 <main class="wrap">
-  {% with messages=get_flashed_messages() %}
-    {% for m in messages %}<div class="flash">{{m}}</div>{% endfor %}
+  {% with messages = get_flashed_messages() %}
+    {% for m in messages %}
+      <div class="flash">{{ m }}</div>
+    {% endfor %}
   {% endwith %}
+
   {% block content %}{% endblock %}
 </main>
-<footer class="wrap footer">OPŁATY · zarządzanie mieszkaniami i rachunkami<br>
-							by Michal Kula / ChatGPT</footer>
+
+<footer class="wrap footer">
+  OPŁATY<br>
+  by Michal Kula / ChatGPT
+</footer>
 </body>
 </html>
