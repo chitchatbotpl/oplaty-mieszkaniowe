@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>OPŁATY · zarządzanie mieszkaniami i rachunkami</title>
+  <title>OPŁATY</title>
   <link rel="stylesheet" href="{{ url_for('static',filename='style.css') }}">
 </head>
 <body>
@@ -13,13 +13,9 @@
     <nav>
       <a href="{{ url_for('index') }}">Panel główny</a>
       <a href="{{ url_for('reports') }}">Raporty</a>
-      <a href="{{ url_for('export_csv') }}">CSV</a>
       {% if current_user_role == 'admin' %}<a href="{{ url_for('users') }}">Użytkownicy</a>{% endif %}
       {% if current_user_email %}<a href="{{ url_for('logout') }}">Wyloguj ({{ current_user_email }})</a>{% endif %}
     </nav>
-  	<form method="post" action="{{ url_for('test_email') }}" style="display:inline;">
-    <button type="submit" class="btn">📧 Test e-mail</button>
-	</form>
   </div>
 </header>
 <main class="wrap">
