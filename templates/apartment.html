@@ -54,6 +54,7 @@
     <div class="reading-item"><span>Poprzedni odczyt</span><b>{{s.previous_reading if s.previous_reading is not none else '—'}}{% if s.unit %} {{s.unit}}{% endif %}</b></div>
     <div class="reading-item"><span>Zużycie</span><b>{{s.consumption if s.consumption is not none else '—'}}{% if s.unit %} {{s.unit}}{% endif %}</b></div>
     <div class="reading-item"><span>Kwota</span><b>{{s.amount_due|money}} zł</b></div>
+    <div class="reading-item"><span>Termin płatności</span><b>{{s.payment_due_date or '—'}}</b></div>
     <div class="pay">
       {% if s.paid %}<span class="status paid">✓ OPŁACONE</span>{% else %}<span class="status unpaid">! NIEOPŁACONE</span>{% endif %}
       <form method="post" action="{{url_for('toggle_paid',reading_id=s.reading_id)}}"><button class="check">{% if s.paid %}☑ Oznacz jako nieopłacone{% else %}☐ Oznacz jako opłacone{% endif %}</button></form>

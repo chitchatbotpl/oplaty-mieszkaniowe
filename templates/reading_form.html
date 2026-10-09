@@ -13,7 +13,10 @@
 </div>
 <label>Kwota do zapłaty (zł)<input type="number" step="0.01" min="0" name="amount_due" required value="{{reading.amount_due if reading else ''}}"></label>
 <label class="checkbox"><input type="checkbox" name="paid" {% if reading and reading.paid %}checked{% endif %}> Oznacz jako opłacone</label>
+<div class="two">
+<label>Termin płatności<input type="date" name="payment_due_date" value="{{ reading.payment_due_date or '' if reading else '' }}"><small>Termin dotyczy tylko tego odczytu.</small></label>
 <label>Data zapłaty<input type="date" name="paid_date" value="{{reading.paid_date or '' if reading else ''}}"></label>
+</div>
 <label>Notatki<textarea name="notes">{{reading.notes if reading else ''}}</textarea></label>
 <button class="btn primary">Zapisz odczyt</button>
 </form>

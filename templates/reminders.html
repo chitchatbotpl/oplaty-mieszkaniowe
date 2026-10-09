@@ -37,6 +37,11 @@
   .rem-info{padding:12px 14px;border-radius:10px;background:var(--soft-bg,#f1f5f9);margin-top:14px;font-size:.9rem}
   @media(max-width:850px){.reminders-grid{grid-template-columns:1fr}}
   @media(max-width:520px){.rem-edit-grid{grid-template-columns:1fr}.rem-card{padding:14px}}
+
+  .due-date-fields{display:none;grid-column:1/-1;gap:10px}
+  .due-date-fields .rem-field{min-width:0}
+  .payment-mode-field{display:none}
+  .due-date-fields select,.due-date-fields input{min-width:0}
 </style>
 
 <div class="reminders-page">
@@ -86,9 +91,31 @@
           </select>
           <span class="rem-muted">Możesz wskazać całe mieszkanie albo jedną konkretną sekcję.</span>
         </div>
-        <div class="rem-field">
-          <label for="new-day">Dzień miesiąca</label>
+        <div class="rem-field fixed-date-field">
+          <label for="new-day">Dzień miesiąca (tryb konkretnej daty)</label>
           <input id="new-day" type="number" name="day_of_month" min="1" max="31" value="1" required>
+        </div>
+        <div class="rem-field payment-mode-field">
+          <label for="new-schedule-mode">Jak ustalać termin przypomnienia płatności?</label>
+          <select id="new-schedule-mode" name="schedule_mode">
+            <option value="fixed">Konkretnego dnia miesiąca (jak dotychczas)</option>
+            <option value="due_date">Na podstawie terminu płatności</option>
+          </select>
+        </div>
+        <div class="due-date-fields">
+          <div class="rem-field">
+            <label for="new-reading-id">Powiąż z odczytem (opcjonalnie)</label>
+            <select id="new-reading-id" name="reading_id" class="reading-link-select">
+              <option value="">Nie wiąż z odczytem — wpiszę termin poniżej</option>
+              {% for item in reading_options %}
+                <option value="{{ item.id }}" data-apartment-id="{{ item.apartment_id }}" data-section-id="{{ item.section_id }}">{{ item.apartment_name }} · {{ item.section_name }} · {{ item.period }} · termin {{ item.payment_due_date }} · {{ item.amount_due|money }} zł</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="rem-field">
+            <label for="new-payment-due-date">Termin płatności (jeśli nie wybierzesz odczytu)</label>
+            <input id="new-payment-due-date" type="date" name="payment_due_date">
+          </div>
         </div>
         <div class="rem-field">
           <label for="new-time">Godzina wysyłki</label>
@@ -118,8 +145,13 @@
                   <div class="rem-muted">
                     {% if reminder.apartment_name %}{{ reminder.apartment_name }}{% else %}Wszystkie mieszkania{% endif %}
                     {% if reminder.section_name %} · {{ reminder.section_name }}{% endif %}
-                    · dzień {{ reminder.day_of_month }} · {{ reminder.time_hm }}
-                    {% if reminder.kind == 'payment' and reminder.days_before %} · {{ reminder.days_before }} dni wcześniej{% endif %}
+                    {% if reminder.kind == 'payment' and reminder.schedule_mode == 'due_date' %}
+                      · termin płatności{% if reminder.reading_id %} z odczytu{% elif reminder.payment_due_date %}: {{ reminder.payment_due_date }}{% endif %}
+                      · {{ reminder.days_before }} dni wcześniej
+                    {% else %}
+                      · dzień {{ reminder.day_of_month }} · {{ reminder.time_hm }}
+                      {% if reminder.kind == 'payment' and reminder.days_before %} · {{ reminder.days_before }} dni wcześniej{% endif %}
+                    {% endif %}
                   </div>
                 </div>
                 <span class="rem-pill {{ 'rem-on' if reminder.active else 'rem-off' }}">{{ 'AKTYWNE' if reminder.active else 'WYŁĄCZONE' }}</span>
@@ -164,9 +196,31 @@
                         {% endfor %}
                       </select>
                     </div>
-                    <div class="rem-field">
-                      <label>Dzień miesiąca</label>
+                    <div class="rem-field fixed-date-field">
+                      <label>Dzień miesiąca (tryb konkretnej daty)</label>
                       <input type="number" name="day_of_month" min="1" max="31" value="{{ reminder.day_of_month }}" required>
+                    </div>
+                    <div class="rem-field payment-mode-field">
+                      <label>Jak ustalać termin płatności?</label>
+                      <select name="schedule_mode" class="schedule-mode-select">
+                        <option value="fixed" {{ 'selected' if reminder.schedule_mode != 'due_date' else '' }}>Konkretnego dnia miesiąca (jak dotychczas)</option>
+                        <option value="due_date" {{ 'selected' if reminder.schedule_mode == 'due_date' else '' }}>Na podstawie terminu płatności</option>
+                      </select>
+                    </div>
+                    <div class="due-date-fields">
+                      <div class="rem-field">
+                        <label>Powiąż z odczytem (opcjonalnie)</label>
+                        <select name="reading_id" class="reading-link-select">
+                          <option value="">Nie wiąż z odczytem — wpiszę termin poniżej</option>
+                          {% for item in reading_options %}
+                            <option value="{{ item.id }}" data-apartment-id="{{ item.apartment_id }}" data-section-id="{{ item.section_id }}" {{ 'selected' if reminder.reading_id == item.id else '' }}>{{ item.apartment_name }} · {{ item.section_name }} · {{ item.period }} · termin {{ item.payment_due_date }} · {{ item.amount_due|money }} zł</option>
+                          {% endfor %}
+                        </select>
+                      </div>
+                      <div class="rem-field">
+                        <label>Termin płatności (jeśli nie wybierzesz odczytu)</label>
+                        <input type="date" name="payment_due_date" value="{{ reminder.payment_due_date or '' }}">
+                      </div>
                     </div>
                     <div class="rem-field">
                       <label>Godzina</label>
@@ -187,7 +241,7 @@
       {% else %}
         <p class="rem-muted">Nie masz jeszcze skonfigurowanych przypomnień. Dodaj pierwsze formularzem obok.</p>
       {% endif %}
-      <div class="rem-info"><strong>Automatyczna wysyłka:</strong> zewnętrzny harmonogram uruchamia sprawdzanie przypomnień co kilka minut. Samo zapisanie przypomnienia nie wysyła od razu wiadomości.</div>
+      <div class="rem-info"><strong>Automatyczna wysyłka:</strong> zewnętrzny harmonogram uruchamia sprawdzanie przypomnień co 15 minut. Samo zapisanie przypomnienia nie wysyła od razu wiadomości.</div>
     </div>
   </div>
 
@@ -236,7 +290,40 @@
     apartment.addEventListener('change', update);
     update();
   }
-  document.querySelectorAll('#new-reminder-form, .rem-edit-form').forEach(filterSections);
+  function configurePaymentFields(form) {
+    const kind = form.querySelector('[name="kind"]');
+    const mode = form.querySelector('[name="schedule_mode"]');
+    const modeField = form.querySelector('.payment-mode-field');
+    const fixedFields = form.querySelectorAll('.fixed-date-field');
+    const dueFields = form.querySelector('.due-date-fields');
+    const readingSelect = form.querySelector('.reading-link-select');
+    const dueDate = form.querySelector('[name="payment_due_date"]');
+    const apartment = form.querySelector('.apartment-select');
+    const section = form.querySelector('.section-select');
+    function update() {
+      const isPayment = kind && kind.value === 'payment';
+      const isDueDate = isPayment && mode && mode.value === 'due_date';
+      if (modeField) modeField.style.display = isPayment ? 'grid' : 'none';
+      fixedFields.forEach(el => el.style.display = isDueDate ? 'none' : 'grid');
+      if (dueFields) dueFields.style.display = isDueDate ? 'grid' : 'none';
+      if (dueDate) dueDate.required = !!(isDueDate && (!readingSelect || !readingSelect.value));
+      if (readingSelect) {
+        const selected = readingSelect.options[readingSelect.selectedIndex];
+        if (selected && selected.value) {
+          if (apartment && selected.dataset.apartmentId) apartment.value = selected.dataset.apartmentId;
+          if (section && selected.dataset.sectionId) section.value = selected.dataset.sectionId;
+        }
+      }
+    }
+    if (kind) kind.addEventListener('change', update);
+    if (mode) mode.addEventListener('change', update);
+    if (readingSelect) readingSelect.addEventListener('change', update);
+    update();
+  }
+  document.querySelectorAll('#new-reminder-form, .rem-edit-form').forEach(function(form) {
+    filterSections(form);
+    configurePaymentFields(form);
+  });
 })();
 </script>
 {% endblock %}
