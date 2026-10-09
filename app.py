@@ -572,8 +572,13 @@ def edit_reading(reading_id):
         con.commit()
         con.close()
         return redirect(url_for('apartment_detail', apartment_id=reading['apartment_id'], month=f['period']))
+    reading_reminders = db_execute(con, '''SELECT id, kind, day_of_month, time_hm, days_before,
+            schedule_mode, payment_due_date, active
+        FROM reminders WHERE user_id=? AND reading_id=?
+        ORDER BY active DESC, time_hm''', (session['user_id'], reading_id)).fetchall()
     con.close()
-    return render_template('reading_form.html', section=reading, reading=reading, month=reading['period'])
+    return render_template('reading_form.html', section=reading, reading=reading,
+                           month=reading['period'], reading_reminders=reading_reminders)
 
 
 @app.post('/reading/<int:reading_id>/paid')
