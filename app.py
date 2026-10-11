@@ -103,7 +103,7 @@ def db_script_init(con):
                 reading DOUBLE PRECISION, previous_reading DOUBLE PRECISION,
                 consumption DOUBLE PRECISION, rate DOUBLE PRECISION,
                 amount_due DOUBLE PRECISION NOT NULL DEFAULT 0,
-                paid INTEGER NOT NULL DEFAULT 0, paid_date DATE,
+                paid INTEGER NOT NULL DEFAULT 0, no_payment INTEGER NOT NULL DEFAULT 0, paid_date DATE,
                 payment_due_date DATE, notes TEXT DEFAULT '',
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(section_id, period))""",
@@ -161,7 +161,7 @@ def db_script_init(con):
             id INTEGER PRIMARY KEY AUTOINCREMENT, section_id INTEGER NOT NULL,
             period TEXT NOT NULL, reading REAL, previous_reading REAL,
             consumption REAL, rate REAL, amount_due REAL NOT NULL DEFAULT 0,
-            paid INTEGER NOT NULL DEFAULT 0, paid_date TEXT, payment_due_date TEXT, notes TEXT DEFAULT '',
+            paid INTEGER NOT NULL DEFAULT 0, no_payment INTEGER NOT NULL DEFAULT 0, paid_date TEXT, payment_due_date TEXT, notes TEXT DEFAULT '',
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(section_id, period),
             FOREIGN KEY(section_id) REFERENCES sections(id) ON DELETE CASCADE);
@@ -202,6 +202,7 @@ def db_script_init(con):
     # Bezpieczne migracje: dodają nowe pola bez usuwania istniejących danych.
     if using_postgres():
         con.execute("ALTER TABLE readings ADD COLUMN IF NOT EXISTS payment_due_date DATE")
+        con.execute("ALTER TABLE readings ADD COLUMN IF NOT EXISTS no_payment INTEGER NOT NULL DEFAULT 0")
         con.execute("ALTER TABLE reminders ADD COLUMN IF NOT EXISTS schedule_mode TEXT NOT NULL DEFAULT 'fixed'")
         con.execute("ALTER TABLE reminders ADD COLUMN IF NOT EXISTS reading_id INTEGER REFERENCES readings(id) ON DELETE SET NULL")
         con.execute("ALTER TABLE reminders ADD COLUMN IF NOT EXISTS payment_due_date DATE")
@@ -390,8 +391,8 @@ def index():
     ''').fetchall()
     month = request.args.get('month') or current_period()
     totals = db_execute(con, '''
-        SELECT COALESCE(SUM(r.amount_due),0) total,
-               COALESCE(SUM(CASE WHEN r.paid=1 THEN r.amount_due ELSE 0 END),0) paid
+        SELECT COALESCE(SUM(CASE WHEN r.no_payment=0 THEN r.amount_due ELSE 0 END),0) total,
+               COALESCE(SUM(CASE WHEN r.paid=1 AND r.no_payment=0 THEN r.amount_due ELSE 0 END),0) paid
         FROM readings r WHERE r.period=?
     ''', (month,)).fetchone()
     con.close()
@@ -463,13 +464,13 @@ def apartment_detail(apartment_id):
     month = request.args.get('month') or current_period()
     sections = db_execute(con, '''
         SELECT s.*, r.id AS reading_id, r.period, r.reading, r.previous_reading,
-               r.consumption, r.rate, r.amount_due, r.paid, r.paid_date, r.payment_due_date,
+               r.consumption, r.rate, r.amount_due, r.paid, r.no_payment, r.paid_date, r.payment_due_date,
                r.notes AS reading_notes
         FROM sections s LEFT JOIN readings r ON r.section_id=s.id AND r.period=?
         WHERE s.apartment_id=? AND s.active=1 ORDER BY s.name
     ''', (month, apartment_id)).fetchall()
-    total = sum(float(x['amount_due'] or 0) for x in sections)
-    paid = sum(float(x['amount_due'] or 0) for x in sections if x['paid'])
+    total = sum(float(x['amount_due'] or 0) for x in sections if x['reading_id'] and not x['no_payment'])
+    paid = sum(float(x['amount_due'] or 0) for x in sections if x['reading_id'] and not x['no_payment'] and x['paid'])
     con.close()
     return render_template('apartment.html', apartment=apartment, sections=sections,
                            month=month, total=total, paid=paid)
@@ -535,12 +536,16 @@ def new_reading(section_id):
         previous = float(f['previous_reading']) if f.get('previous_reading') else None
         consumption = float(f['consumption']) if f.get('consumption') else (reading - previous if reading is not None and previous is not None else None)
         rate = float(f['rate']) if f.get('rate') else None
-        amount = float(f.get('amount_due') or 0)
+        no_payment = 1 if f.get('no_payment') == 'on' else 0
+        amount = 0 if no_payment else float(f.get('amount_due') or 0)
+        if no_payment:
+            reading = previous = consumption = rate = None
+        paid = 1 if no_payment or f.get('paid') == 'on' else 0
+        paid_date = None if no_payment else (f.get('paid_date') or None)
         try:
-            db_execute(con, '''INSERT INTO readings(section_id,period,reading,previous_reading,consumption,rate,amount_due,paid,paid_date,payment_due_date,notes)
-                               VALUES (?,?,?,?,?,?,?,?,?,?,?)''',
-                       (section_id, f['period'], reading, previous, consumption, rate, amount,
-                        1 if f.get('paid') == 'on' else 0, f.get('paid_date') or None, f.get('payment_due_date') or None, f.get('notes','')))
+            db_execute(con, '''INSERT INTO readings(section_id,period,reading,previous_reading,consumption,rate,amount_due,paid,no_payment,paid_date,payment_due_date,notes)
+                               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''',
+                       (section_id, f['period'], reading, previous, consumption, rate, amount, paid, no_payment, paid_date, None if no_payment else (f.get('payment_due_date') or None), f.get('notes','')))
             con.commit()
         except Exception:
             con.rollback()
@@ -562,23 +567,49 @@ def edit_reading(reading_id):
         return 'Nie znaleziono odczytu', 404
     if request.method == 'POST':
         f = request.form
-        current = float(f['reading']) if f.get('reading') else None
-        previous = float(f['previous_reading']) if f.get('previous_reading') else None
-        consumption = float(f['consumption']) if f.get('consumption') else (current - previous if current is not None and previous is not None else None)
-        db_execute(con, '''UPDATE readings SET period=?, reading=?, previous_reading=?, consumption=?, rate=?, amount_due=?, paid=?, paid_date=?, payment_due_date=?, notes=? WHERE id=?''',
-                   (f['period'], current, previous, consumption, float(f['rate']) if f.get('rate') else None,
-                    float(f.get('amount_due') or 0), 1 if f.get('paid') == 'on' else 0,
-                    f.get('paid_date') or None, f.get('payment_due_date') or None, f.get('notes',''), reading_id))
+        no_payment = 1 if f.get('no_payment') == 'on' else 0
+        current = float(f['reading']) if f.get('reading') and not no_payment else None
+        previous = float(f['previous_reading']) if f.get('previous_reading') and not no_payment else None
+        consumption = (float(f['consumption']) if f.get('consumption') else (current - previous if current is not None and previous is not None else None)) if not no_payment else None
+        paid = 1 if no_payment or f.get('paid') == 'on' else 0
+        paid_date = None if no_payment else (f.get('paid_date') or None)
+        db_execute(con, '''UPDATE readings SET period=?, reading=?, previous_reading=?, consumption=?, rate=?, amount_due=?, paid=?, no_payment=?, paid_date=?, payment_due_date=?, notes=? WHERE id=?''',
+                   (f['period'], current, previous, consumption, float(f['rate']) if f.get('rate') and not no_payment else None,
+                    0 if no_payment else float(f.get('amount_due') or 0), paid, no_payment,
+                    paid_date, None if no_payment else (f.get('payment_due_date') or None), f.get('notes',''), reading_id))
         con.commit()
         con.close()
         return redirect(url_for('apartment_detail', apartment_id=reading['apartment_id'], month=f['period']))
-    reading_reminders = db_execute(con, '''SELECT id, kind, day_of_month, time_hm, days_before,
-            schedule_mode, payment_due_date, active
-        FROM reminders WHERE user_id=? AND reading_id=?
-        ORDER BY active DESC, time_hm''', (session['user_id'], reading_id)).fetchall()
     con.close()
-    return render_template('reading_form.html', section=reading, reading=reading,
-                           month=reading['period'], reading_reminders=reading_reminders)
+    return render_template('reading_form.html', section=reading, reading=reading, month=reading['period'])
+
+
+@app.post('/section/<int:section_id>/no-payment')
+@login_required
+def mark_no_payment(section_id):
+    period = (request.form.get('period') or current_period()).strip()
+    if len(period) != 7 or period[4] != '-':
+        flash('Nieprawidłowy miesiąc.')
+        return redirect(url_for('index'))
+    con = get_db()
+    section = db_execute(con, 'SELECT * FROM sections WHERE id=?', (section_id,)).fetchone()
+    if not section:
+        con.close()
+        return 'Nie znaleziono sekcji', 404
+    existing = db_execute(con, 'SELECT id,no_payment FROM readings WHERE section_id=? AND period=?', (section_id, period)).fetchone()
+    if existing and not existing['no_payment']:
+        flash('W tym miesiącu istnieje już rachunek. Edytuj go i zaznacz „Brak płatności”, jeśli to właściwe.')
+    elif existing:
+        db_execute(con, 'DELETE FROM readings WHERE id=?', (existing['id'],))
+        con.commit()
+        flash('Usunięto oznaczenie „Brak płatności”.')
+    else:
+        db_execute(con, '''INSERT INTO readings(section_id,period,amount_due,paid,no_payment,paid_date,payment_due_date,notes)
+                           VALUES (?,?,0,1,1,NULL,NULL,'Brak płatności w tym miesiącu')''', (section_id, period))
+        con.commit()
+        flash('Miesiąc oznaczono jako „Brak płatności” — status zaznaczony jako opłacony.')
+    con.close()
+    return redirect(url_for('apartment_detail', apartment_id=section['apartment_id'], month=period))
 
 
 @app.post('/reading/<int:reading_id>/paid')
@@ -624,7 +655,7 @@ def get_report_data(year, apartment_id=None):
     sections = db_execute(con, f'''SELECT s.id AS section_id,s.name AS section,s.unit,a.id AS apartment_id,a.name AS apartment
         FROM sections s JOIN apartments a ON a.id=s.apartment_id WHERE s.active=1 AND a.active=1 {apartment_sql}
         ORDER BY a.name,s.name''', tuple(apt_param)).fetchall()
-    readings = db_execute(con, f'''SELECT r.id,r.period,r.section_id,r.reading,r.previous_reading,r.consumption,r.rate,r.amount_due,r.paid,r.paid_date,r.notes
+    readings = db_execute(con, f'''SELECT r.id,r.period,r.section_id,r.reading,r.previous_reading,r.consumption,r.rate,r.amount_due,r.paid,r.no_payment,r.paid_date,r.notes
         FROM readings r JOIN sections s ON s.id=r.section_id JOIN apartments a ON a.id=s.apartment_id
         WHERE r.period LIKE ? {apartment_sql}''', tuple([str(year) + '-%'] + apt_param)).fetchall()
     con.close()
@@ -634,12 +665,12 @@ def get_report_data(year, apartment_id=None):
         period = f'{int(year):04d}-{m:02d}'
         for sec in sections:
             r = reading_map.get((sec['section_id'], period))
-            status = 'BRAK ODCZYTU / KWOTY' if r is None else ('OPŁACONE' if r['paid'] else 'NIEOPŁACONE')
+            status = 'BRAK WPISU' if r is None else ('BRAK PŁATNOŚCI' if r['no_payment'] else ('OPŁACONE' if r['paid'] else 'NIEOPŁACONE'))
             rows.append({'period': period, 'apartment': sec['apartment'], 'apartment_id': sec['apartment_id'],
                          'section': sec['section'], 'unit': sec['unit'] or '', 'reading_id': r['id'] if r else None,
                          'reading': r['reading'] if r else None, 'previous_reading': r['previous_reading'] if r else None,
                          'consumption': r['consumption'] if r else None, 'rate': r['rate'] if r else None,
-                         'amount_due': float(r['amount_due'] or 0) if r else 0.0,
+                         'amount_due': float(r['amount_due'] or 0) if r else 0.0, 'no_payment': bool(r['no_payment']) if r else False,
                          'paid': bool(r['paid']) if r else False, 'paid_date': r['paid_date'] if r else None,
                          'notes': r['notes'] if r else '', 'status': status})
     return rows, apartments
@@ -659,8 +690,8 @@ def reports():
     for i, name in enumerate(names, 1):
         mr = [r for r in rows if r['period'].endswith(f'-{i:02d}')]
         months.append({'period': f'{year}-{i:02d}', 'name': name, 'rows': mr,
-                       'total': sum(r['amount_due'] for r in mr if r['reading_id']),
-                       'unpaid': sum(r['amount_due'] for r in mr if r['reading_id'] and not r['paid']),
+                       'total': sum(r['amount_due'] for r in mr if r['reading_id'] and not r['no_payment']),
+                       'unpaid': sum(r['amount_due'] for r in mr if r['reading_id'] and not r['no_payment'] and not r['paid']),
                        'missing': sum(1 for r in mr if not r['reading_id'])})
     return render_template('reports.html', months=months, apartments=apartments, year=year, apartment_id=apartment_id)
 
@@ -731,7 +762,7 @@ def export_pdf():
             data.append([r['apartment'],r['section'],str(r['reading']) if r['reading'] is not None else '—',str(r['consumption']) if r['consumption'] is not None else '—',f"{r['amount_due']:.2f} zł" if r['reading_id'] else '—',r['status']])
         t = Table(data, repeatRows=1, colWidths=[42*mm,43*mm,25*mm,25*mm,27*mm,55*mm])
         t.setStyle(TableStyle([('FONTNAME',(0,0),(-1,-1),rf),('FONTNAME',(0,0),(-1,0),bf),('FONTSIZE',(0,0),(-1,-1),7.2),('BACKGROUND',(0,0),(-1,0),colors.HexColor('#e9e9e9')),('GRID',(0,0),(-1,-1),0.35,colors.HexColor('#bbbbbb')),('VALIGN',(0,0),(-1,-1),'MIDDLE'),('ROWBACKGROUNDS',(0,1),(-1,-1),[colors.white,colors.HexColor('#f7f7f7')])]))
-        story += [t, Paragraph(f"Suma: {sum(r['amount_due'] for r in mr if r['reading_id']):.2f} zł · Do zapłaty: {sum(r['amount_due'] for r in mr if r['reading_id'] and not r['paid']):.2f} zł · Brak wpisów: {sum(1 for r in mr if not r['reading_id'])}", small)]
+        story += [t, Paragraph(f"Suma: {sum(r['amount_due'] for r in mr if r['reading_id'] and not r['no_payment']):.2f} zł · Do zapłaty: {sum(r['amount_due'] for r in mr if r['reading_id'] and not r['no_payment'] and not r['paid']):.2f} zł · Brak wpisów: {sum(1 for r in mr if not r['reading_id'])}", small)]
     doc.build(story); buf.seek(0)
     fn = f'oplaty_{year}' + (f'_mieszkanie_{apartment_id}' if apartment_id else '') + '.pdf'
     return send_file(buf, mimetype='application/pdf', as_attachment=True, download_name=fn)

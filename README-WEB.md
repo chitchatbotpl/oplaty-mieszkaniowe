@@ -23,3 +23,11 @@ pip install -r requirements.txt
 python app.py
 
 Bez DATABASE_URL używany jest lokalny plik `oplaty.db`.
+
+
+## v14 — brak płatności w miesiącu
+- Dodano pole `readings.no_payment` przez bezpieczną migrację przy starcie aplikacji.
+- Status „Brak płatności w tym miesiącu” zapisuje miesiąc jako rozliczony (paid=1), ale bez kwoty, odczytu i daty zapłaty.
+- Status nie zwiększa sum należności, nie pojawia się w zaległościach i nie uruchamia przypomnień płatniczych.
+- Dostępny przy każdej sekcji w widoku mieszkania oraz w formularzu odczytu.
+- Zmiana nie usuwa ani nie przepisuje istniejących odczytów.

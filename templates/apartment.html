@@ -48,7 +48,10 @@
     </div>
   </div>
 
-  {% if s.reading_id %}
+  {% if s.reading_id and s.no_payment %}
+  <div class="reading"><div class="pay"><span class="status paid">✓ BRAK PŁATNOŚCI — ROZLICZONE</span></div></div>
+  <div class="reading-footer"><span class="muted">Ten miesiąc nie ma należności i nie generuje przypomnienia.</span><div class="actions"><a href="{{url_for('edit_reading',reading_id=s.reading_id)}}">Edytuj status</a></div></div>
+  {% elif s.reading_id %}
   <div class="reading">
     <div class="reading-item"><span>Obecny odczyt</span><b>{{s.reading if s.reading is not none else '—'}}{% if s.unit %} {{s.unit}}{% endif %}</b></div>
     <div class="reading-item"><span>Poprzedni odczyt</span><b>{{s.previous_reading if s.previous_reading is not none else '—'}}{% if s.unit %} {{s.unit}}{% endif %}</b></div>
@@ -65,7 +68,7 @@
     <div class="actions"><a href="{{url_for('edit_reading',reading_id=s.reading_id)}}">✎ Edytuj odczyt</a><form method="post" action="{{url_for('delete_reading',reading_id=s.reading_id)}}" onsubmit="return confirm('Usunąć ten odczyt?')"><button type="submit">Usuń odczyt</button></form></div>
   </div>
   {% else %}
-    <div class="empty small">Brak odczytu dla {{month}}. <a href="{{url_for('new_reading',section_id=s.id,month=month)}}">＋ Dodaj odczyt i kwotę</a></div>
+    <div class="empty small">Brak wpisu dla {{month}}. <a href="{{url_for('new_reading',section_id=s.id,month=month)}}">＋ Dodaj odczyt / kwotę</a> · <form style="display:inline" method="post" action="{{url_for('mark_no_payment',section_id=s.id)}}"><input type="hidden" name="period" value="{{month}}"><button class="check" type="submit">☑ Brak płatności</button></form></div>
   {% endif %}
 </article>
 {% else %}
