@@ -61,6 +61,8 @@
           <td>
             {% if r.status == 'OPŁACONE' %}
               <span class="status paid">✓ OPŁACONE</span>
+            {% elif r.status == 'BRAK PŁATNOŚCI' %}
+              <span class="status paid">✓ BRAK PŁATNOŚCI</span>
             {% elif r.status == 'NIEOPŁACONE' %}
               <span class="status unpaid">! NIEOPŁACONE</span>
             {% else %}

@@ -716,7 +716,7 @@ def export_csv():
         w.writerow([r['period'],r['apartment'],r['section'],r['unit'],r['reading'] if r['reading'] is not None else '',
                     r['previous_reading'] if r['previous_reading'] is not None else '',r['consumption'] if r['consumption'] is not None else '',
                     r['rate'] if r['rate'] is not None else '',r['amount_due'] if r['reading_id'] else '',
-                    'TAK' if r['paid'] else 'NIE',r['paid_date'] or '',r['status'],r['notes']])
+                    ('BRAK PŁATNOŚCI' if r['no_payment'] else ('TAK' if r['paid'] else 'NIE')),r['paid_date'] or '',r['status'],r['notes']])
     fn = f'oplaty_{year}' + (f'_mieszkanie_{apartment_id}' if apartment_id else '') + '.csv'
     return send_file(io.BytesIO(out.getvalue().encode('utf-8-sig')), mimetype='text/csv', as_attachment=True, download_name=fn)
 
