@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, send_file, flash, session, abort
-import os, sqlite3, csv, io, json, urllib.request, urllib.error
+import os, sqlite3, csv, io, json, urllib.request, urllib.error, secrets, hashlib
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
 from pathlib import Path
@@ -112,6 +112,11 @@ def db_script_init(con):
                 password_hash TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'user',
                 active INTEGER NOT NULL DEFAULT 1,
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)""",
+            """CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL
+                REFERENCES users(id) ON DELETE CASCADE,
+                token_hash TEXT NOT NULL UNIQUE, expires_at TEXT NOT NULL,
+                used_at TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""",
             """CREATE TABLE IF NOT EXISTS reminders (
                 id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL
                 REFERENCES users(id) ON DELETE CASCADE,
@@ -170,6 +175,11 @@ def db_script_init(con):
             password_hash TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'user',
             active INTEGER NOT NULL DEFAULT 1,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+        CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
+            token_hash TEXT NOT NULL UNIQUE, expires_at TEXT NOT NULL,
+            used_at TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE);
         CREATE TABLE IF NOT EXISTS reminders (
             id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
             apartment_id INTEGER, section_id INTEGER, kind TEXT NOT NULL,
@@ -326,6 +336,86 @@ def login():
     return render_template('login.html', next=request.args.get('next', ''))
 
 
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip().lower()
+        # Always show the same response to avoid revealing registered accounts.
+        message = 'Jeśli aktywne konto z tym adresem istnieje, wyślemy link do zmiany hasła.'
+        con = get_db()
+        user = db_execute(con, 'SELECT id, email FROM users WHERE email=? AND active=1', (email,)).fetchone()
+        if user:
+            raw_token = secrets.token_urlsafe(32)
+            token_hash = hashlib.sha256(raw_token.encode('utf-8')).hexdigest()
+            expires_at = (datetime.utcnow() + timedelta(minutes=30)).strftime('%Y-%m-%dT%H:%M:%S')
+            db_execute(con, 'UPDATE password_reset_tokens SET used_at=? WHERE user_id=? AND used_at IS NULL',
+                       (datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S'), user['id']))
+            db_execute(con, 'INSERT INTO password_reset_tokens(user_id, token_hash, expires_at) VALUES (?,?,?)',
+                       (user['id'], token_hash, expires_at))
+            con.commit()
+            reset_url = url_for('reset_password', token=raw_token, _external=True)
+            try:
+                safe_url = reset_url.replace('&', '&amp;')
+                html = ('<html><body style="font-family:Arial,sans-serif;line-height:1.6">'
+                        '<h2>OPŁATY — zmiana hasła</h2>'
+                        '<p>Otrzymaliśmy prośbę o zmianę hasła do aplikacji OPŁATY.</p>'
+                        f'<p><a href="{safe_url}" style="display:inline-block;padding:12px 18px;background:#222;color:#fff;text-decoration:none;border-radius:8px">Ustaw nowe hasło</a></p>'
+                        '<p>Link jest ważny przez 30 minut i można użyć go tylko raz.</p>'
+                        '<p>Jeśli to nie Ty wysłałeś prośbę, zignoruj tę wiadomość.</p></body></html>')
+                plain = f'OPŁATY — zmiana hasła\n\nOtwórz link, aby ustawić nowe hasło (ważny 30 minut):\n{reset_url}\n\nJeśli to nie Ty wysłałeś prośbę, zignoruj tę wiadomość.'
+                send_brevo_email(user['email'], 'OPŁATY — link do zmiany hasła', html, plain)
+            except Exception:
+                app.logger.exception('Nie udało się wysłać linku resetującego hasło')
+                # Invalidate the token if mail could not be sent.
+                db_execute(con, 'UPDATE password_reset_tokens SET used_at=? WHERE token_hash=?',
+                           (datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S'), token_hash))
+                con.commit()
+        con.close()
+        flash(message)
+        return redirect(url_for('forgot_password'))
+    return render_template('forgot_password.html')
+
+
+@app.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
+    con = get_db()
+    record = db_execute(con, '''
+        SELECT t.id AS token_id, t.user_id, t.expires_at, t.used_at
+        FROM password_reset_tokens t
+        JOIN users u ON u.id=t.user_id
+        WHERE t.token_hash=? AND u.active=1
+    ''', (token_hash,)).fetchone()
+    now = datetime.utcnow()
+    valid = False
+    if record and not record['used_at']:
+        try:
+            valid = datetime.strptime(record['expires_at'][:19], '%Y-%m-%dT%H:%M:%S') > now
+        except (ValueError, TypeError):
+            valid = False
+    if not valid:
+        con.close()
+        return render_template('reset_password.html', token=token, invalid=True)
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        confirm_password = request.form.get('confirm_password', '')
+        if len(password) < 8:
+            flash('Hasło musi mieć co najmniej 8 znaków.')
+        elif password != confirm_password:
+            flash('Hasła nie są takie same.')
+        else:
+            db_execute(con, 'UPDATE users SET password_hash=? WHERE id=?',
+                       (generate_password_hash(password), record['user_id']))
+            db_execute(con, 'UPDATE password_reset_tokens SET used_at=? WHERE user_id=? AND used_at IS NULL',
+                       (now.strftime('%Y-%m-%dT%H:%M:%S'), record['user_id']))
+            con.commit()
+            con.close()
+            flash('Hasło zostało zmienione. Możesz się zalogować.')
+            return redirect(url_for('login'))
+    con.close()
+    return render_template('reset_password.html', token=token, invalid=False)
+
+
 @app.get('/logout')
 def logout():
     session.clear()
@@ -384,7 +474,7 @@ def delete_user(user_id):
 @login_required
 def index():
     con = get_db()
-    apartments = db_execute(con, '''
+    apartment_rows = db_execute(con, '''
         SELECT a.*, COUNT(DISTINCT s.id) AS section_count
         FROM apartments a LEFT JOIN sections s ON s.apartment_id=a.id AND s.active=1
         WHERE a.active=1 GROUP BY a.id ORDER BY a.name
@@ -395,6 +485,20 @@ def index():
                COALESCE(SUM(CASE WHEN r.paid=1 AND r.no_payment=0 THEN r.amount_due ELSE 0 END),0) paid
         FROM readings r WHERE r.period=?
     ''', (month,)).fetchone()
+    apartments = []
+    for a in apartment_rows:
+        sections = db_execute(con, '''
+            SELECT s.id, s.name, s.unit,
+                   COALESCE(SUM(CASE WHEN r.no_payment=0 THEN r.amount_due ELSE 0 END),0) AS total,
+                   COALESCE(SUM(CASE WHEN r.paid=1 AND r.no_payment=0 THEN r.amount_due ELSE 0 END),0) AS paid
+            FROM sections s
+            LEFT JOIN readings r ON r.section_id=s.id AND r.period=?
+            WHERE s.apartment_id=? AND s.active=1
+            GROUP BY s.id, s.name, s.unit
+            ORDER BY s.id
+        ''', (month, a['id'])).fetchall()
+        apartments.append({'id': a['id'], 'name': a['name'], 'address': a['address'],
+                           'section_count': a['section_count'], 'sections': sections})
     con.close()
     return render_template('index.html', apartments=apartments, month=month, totals=totals)
 

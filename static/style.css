@@ -92,3 +92,36 @@ header{background:linear-gradient(90deg,rgba(255,255,255,.94),rgba(20,20,20,.94)
 .report-summary { display:flex; gap:18px; flex-wrap:wrap; font-size:.92rem; }
 .report-summary strong { font-weight:800; }
 .muted { opacity:.7; }
+
+
+/* v16: per-section amounts on the dashboard */
+.section-totals {
+  margin: 0 14px 14px;
+  padding: 12px;
+  border: 1px solid rgba(120, 120, 120, .22);
+  border-radius: 14px;
+  background: rgba(255,255,255,.045);
+}
+.section-totals-title { font-size: .82rem; font-weight: 700; margin-bottom: 8px; opacity: .8; }
+.section-total-row {
+  display: grid;
+  grid-template-columns: minmax(75px, 1.2fr) repeat(2, minmax(85px, 1fr));
+  gap: 8px;
+  align-items: center;
+  padding: 8px 0;
+  border-top: 1px solid rgba(120,120,120,.16);
+}
+.section-total-name { font-weight: 650; overflow-wrap: anywhere; }
+.section-total-value { display: flex; flex-direction: column; gap: 2px; text-align: right; }
+.section-total-value small { font-size: .7rem; opacity: .72; }
+.section-total-value b { font-size: .9rem; font-variant-numeric: tabular-nums; }
+.due-value b { color: #ef7777; }
+.paid-value b { color: #58bd83; }
+.login-help { margin-top: 18px; text-align: center; font-size: .92rem; }
+.login-help a { text-decoration: underline; }
+@media (max-width: 480px) {
+  .section-totals { margin: 0 8px 10px; padding: 9px; }
+  .section-total-row { grid-template-columns: minmax(65px, .9fr) repeat(2, minmax(70px, 1fr)); gap: 5px; }
+  .section-total-value b { font-size: .8rem; }
+  .section-total-value small { font-size: .64rem; }
+}

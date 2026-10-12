@@ -49,10 +49,22 @@ function syncMonth() {
       <div class="muted">Sekcje: {{a.section_count}}</div>
       <span class="open">Otwórz →</span>
     </a>
+    {% if a.sections %}
+    <div class="section-totals">
+      <div class="section-totals-title">Rozliczenie sekcji · {{month[5:7]}}.{{month[0:4]}}</div>
+      {% for sec in a.sections %}
+      <div class="section-total-row">
+        <span class="section-total-name">{{sec.name}}</span>
+        <span class="section-total-value due-value"><small>Do zapłaty</small><b>{{(sec.total-sec.paid)|money}} zł</b></span>
+        <span class="section-total-value paid-value"><small>Zapłacono</small><b>{{sec.paid|money}} zł</b></span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
     <div class="apartment-actions">
       <a href="{{url_for('edit_apartment',apartment_id=a.id)}}">✎ Edytuj</a>
-      <form method="post" action="{{url_for('delete_apartment',apartment_id=a.id)}}" onsubmit="return confirm('Usunąć mieszkanie {{a.name}}? Zostaną usunięte także jego sekcje i odczyty. Tej operacji nie można cofnąć.')">
-        <button class="danger-link" type="submit">🗑 Usuń</button>
+      <form method="post" action="{{url_for('delete_apartment',apartment_id=a.id)}}" onsubmit="return confirm('Usunąć obszar opłat {{a.name}}? Zostaną usunięte także jego sekcje i odczyty. Tej operacji nie można cofnąć.')">
+        <button class="danger-link" type="submit">🗑 Usuń obszar opłat</button>
       </form>
     </div>
   </div>

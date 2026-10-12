@@ -9,8 +9,8 @@
   </div>
   <div class="top-actions">
     <a class="btn" href="{{url_for('edit_apartment',apartment_id=apartment.id)}}">✎ Edytuj</a>
-    <form method="post" action="{{url_for('delete_apartment',apartment_id=apartment.id)}}" onsubmit="return confirm('Usunąć mieszkanie {{apartment.name}}? Zostaną usunięte także jego sekcje i odczyty. Tej operacji nie można cofnąć.')">
-      <button class="btn danger-btn" type="submit">🗑 Usuń mieszkanie</button>
+    <form method="post" action="{{url_for('delete_apartment',apartment_id=apartment.id)}}" onsubmit="return confirm('Usunąć obszar opłat {{apartment.name}}? Zostaną usunięte także jego sekcje i odczyty. Tej operacji nie można cofnąć.')">
+      <button class="btn danger-btn" type="submit">🗑 Usuń obszar opłat</button>
     </form>
   </div>
 </div>
