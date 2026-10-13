@@ -490,7 +490,10 @@ def index():
         sections = db_execute(con, '''
             SELECT s.id, s.name, s.unit,
                    COALESCE(SUM(CASE WHEN r.no_payment=0 THEN r.amount_due ELSE 0 END),0) AS total,
-                   COALESCE(SUM(CASE WHEN r.paid=1 AND r.no_payment=0 THEN r.amount_due ELSE 0 END),0) AS paid
+                   COALESCE(SUM(CASE WHEN r.paid=1 AND r.no_payment=0 THEN r.amount_due ELSE 0 END),0) AS paid,
+                   COALESCE(MAX(r.paid),0) AS paid_status,
+                   COALESCE(MAX(r.no_payment),0) AS no_payment_status,
+                   COUNT(r.id) AS reading_count
             FROM sections s
             LEFT JOIN readings r ON r.section_id=s.id AND r.period=?
             WHERE s.apartment_id=? AND s.active=1

@@ -53,12 +53,17 @@ function syncMonth() {
     <div class="section-totals">
       <div class="section-totals-title">Rozliczenie sekcji · {{month[5:7]}}.{{month[0:4]}}</div>
       {% for sec in a.sections %}
-      <div class="section-total-row">
-        <span class="section-total-name">{{sec.name}}</span>
+      <div class="section-total-row {{ 'section-paid' if (sec.paid_status or sec.no_payment_status) else 'section-unpaid' }}">
+        <span class="section-total-name"><span class="section-status {{ 'status-paid' if (sec.paid_status or sec.no_payment_status) else 'status-unpaid' }}" aria-label="{{ 'Opłacone' if (sec.paid_status or sec.no_payment_status) else 'Nieopłacone' }}">{{ '✓' if (sec.paid_status or sec.no_payment_status) else '✕' }}</span>{{sec.name}}</span>
         <span class="section-total-value due-value"><small>Do zapłaty</small><b>{{(sec.total-sec.paid)|money}} zł</b></span>
         <span class="section-total-value paid-value"><small>Zapłacono</small><b>{{sec.paid|money}} zł</b></span>
       </div>
       {% endfor %}
+      <div class="section-total-row section-grand-total">
+        <span class="section-total-name">SUMA</span>
+        <span class="section-total-value due-value"><small>Do zapłaty</small><b>{{(a.sections|sum(attribute='total') - a.sections|sum(attribute='paid'))|money}} zł</b></span>
+        <span class="section-total-value paid-value"><small>Zapłacono</small><b>{{a.sections|sum(attribute='paid')|money}} zł</b></span>
+      </div>
     </div>
     {% endif %}
     <div class="apartment-actions">

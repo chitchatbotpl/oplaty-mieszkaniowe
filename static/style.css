@@ -125,3 +125,18 @@ header{background:linear-gradient(90deg,rgba(255,255,255,.94),rgba(20,20,20,.94)
   .section-total-value b { font-size: .8rem; }
   .section-total-value small { font-size: .64rem; }
 }
+
+
+/* v17: status płatności, pastelowe tła i sumy obszaru */
+.section-total-row.section-unpaid { background: #fff0f0; border-radius: 7px; padding: 8px 6px; }
+.section-total-row.section-paid { background: #eaf8ef; border-radius: 7px; padding: 8px 6px; }
+.section-total-name { display:flex; align-items:center; gap:6px; }
+.section-status { display:inline-flex; align-items:center; justify-content:center; flex:0 0 18px; width:18px; height:18px; font-weight:900; font-size:17px; line-height:1; }
+.status-paid { color:#0b9b48; }
+.status-unpaid { color:#e00000; }
+.section-grand-total { margin-top:7px; padding-top:10px; border-top:2px solid rgba(0,0,0,.14); background:rgba(255,255,255,.65); border-radius:7px; padding-left:6px; padding-right:6px; }
+.section-grand-total .section-total-name { font-weight:900; letter-spacing:.02em; }
+@media (max-width: 480px) {
+  .section-total-name { gap:4px; }
+  .section-status { flex-basis:16px; width:16px; font-size:15px; }
+}
