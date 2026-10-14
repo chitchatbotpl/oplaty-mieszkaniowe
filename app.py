@@ -569,6 +569,13 @@ def apartment_detail(apartment_id):
         con.close()
         return 'Nie znaleziono mieszkania', 404
     month = request.args.get('month') or current_period()
+    # Rok wykresu jest niezależny od miesiąca wybranego do edycji opłat.
+    requested_year = (request.args.get('year') or month[:4] or current_period()[:4]).strip()
+    if not re.fullmatch(r'\d{4}', requested_year) or not 2000 <= int(requested_year) <= 2100:
+        chart_year = int(month[:4]) if re.fullmatch(r'\d{4}', month[:4]) else int(current_period()[:4])
+    else:
+        chart_year = int(requested_year)
+
     sections = db_execute(con, '''
         SELECT s.*, r.id AS reading_id, r.period, r.reading, r.previous_reading,
                r.consumption, r.rate, r.amount_due, r.paid, r.no_payment, r.paid_date, r.payment_due_date,
@@ -578,9 +585,31 @@ def apartment_detail(apartment_id):
     ''', (month, apartment_id)).fetchall()
     total = sum(float(x['amount_due'] or 0) for x in sections if x['reading_id'] and not x['no_payment'])
     paid = sum(float(x['amount_due'] or 0) for x in sections if x['reading_id'] and not x['no_payment'] and x['paid'])
+
+    annual_rows = db_execute(con, '''
+        SELECT r.section_id, r.period, r.amount_due, r.no_payment
+        FROM readings r JOIN sections s ON s.id=r.section_id
+        WHERE s.apartment_id=? AND s.active=1 AND r.period>=? AND r.period<=?
+        ORDER BY r.period
+    ''', (apartment_id, f'{chart_year}-01', f'{chart_year}-12')).fetchall()
+    annual_lookup = {}
+    for row in annual_rows:
+        # Brak wpisu i status „Brak płatności” to brak kwoty na wykresie, a nie 0 zł.
+        annual_lookup[(row['section_id'], row['period'])] = None if row['no_payment'] else float(row['amount_due'] or 0)
+    chart_colors = ['#2563eb', '#f97316', '#16a34a', '#9333ea', '#dc2626', '#0891b2', '#c026d3', '#a16207', '#4f46e5', '#0f766e', '#db2777', '#64748b']
+    chart_labels = ['Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec', 'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień']
+    chart_series = []
+    for idx, section in enumerate(sections):
+        values = [annual_lookup.get((section['id'], f'{chart_year}-{month_num:02d}')) for month_num in range(1, 13)]
+        chart_series.append({
+            'id': section['id'], 'name': section['name'],
+            'color': chart_colors[idx % len(chart_colors)] if idx < len(chart_colors) else f'hsl({(idx * 47) % 360}, 68%, 43%)',
+            'values': values,
+        })
     con.close()
     return render_template('apartment.html', apartment=apartment, sections=sections,
-                           month=month, total=total, paid=paid)
+                           month=month, total=total, paid=paid, chart_year=chart_year,
+                           chart_labels=chart_labels, chart_series=chart_series)
 
 
 @app.post('/apartment/<int:apartment_id>/section/new')

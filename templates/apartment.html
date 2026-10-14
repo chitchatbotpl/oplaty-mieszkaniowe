@@ -15,6 +15,41 @@
   </div>
 </div>
 
+<section class="cardbox annual-chart-card" aria-labelledby="annual-chart-title">
+  <div class="annual-chart-header">
+    <div>
+      <h2 id="annual-chart-title">Roczne zestawienie opłat</h2>
+      <p class="muted">Miesięczne kwoty należności dla każdej sekcji. Brak wpisu i „Brak płatności” nie są pokazywane jako 0 zł.</p>
+    </div>
+    <form class="chart-year-form" method="get">
+      <input type="hidden" name="month" value="{{month}}">
+      <label for="chart-year">Rok</label>
+      <select id="chart-year" name="year">
+        {% for y in range(chart_year + 3, chart_year - 11, -1) %}
+          <option value="{{y}}" {% if y == chart_year %}selected{% endif %}>{{y}}</option>
+        {% endfor %}
+      </select>
+      <button class="btn" type="submit">Pokaż rok</button>
+    </form>
+  </div>
+  {% if chart_series %}
+    <div class="annual-chart-layout">
+      <div class="annual-chart-canvas-wrap"><canvas id="annualFeesChart" role="img" aria-label="Wykres liniowy miesięcznych kwot opłat w roku {{chart_year}}"></canvas></div>
+      <div class="annual-chart-legend" id="annualChartLegend" aria-label="Filtruj sekcje na wykresie">
+        {% for series in chart_series %}
+          <label class="chart-legend-item" for="chart-section-{{series.id}}">
+            <input type="checkbox" id="chart-section-{{series.id}}" data-series-index="{{loop.index0}}" checked>
+            <span class="chart-legend-line" style="--series-color: {{series.color}}"></span>
+            <span>{{series.name}}</span>
+          </label>
+        {% endfor %}
+      </div>
+    </div>
+  {% else %}
+    <div class="empty small">Dodaj sekcję, aby wyświetlić wykres roczny.</div>
+  {% endif %}
+</section>
+
 <div class="toolbar glass">
   <form method="get"><label class="month-picker-label">Rok i miesiąc <input class="month-picker" type="month" name="month" value="{{month}}" aria-label="Wybierz rok i miesiąc"></label><button class="btn">Pokaż</button></form>
   <div class="summary">
@@ -75,4 +110,61 @@
 <div class="empty">Nie masz jeszcze żadnych sekcji.</div>
 {% endfor %}
 </div>
+{% if chart_series %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+(() => {
+  const canvas = document.getElementById('annualFeesChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+  const labels = {{ chart_labels|tojson }};
+  const series = {{ chart_series|tojson }};
+  const money = value => new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' }).format(value);
+  const chart = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: series.map(item => ({
+        label: item.name,
+        data: item.values,
+        borderColor: item.color,
+        backgroundColor: item.color,
+        pointBackgroundColor: item.color,
+        pointBorderColor: '#fff',
+        pointBorderWidth: 1.5,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        borderWidth: 2.5,
+        tension: 0.25,
+        spanGaps: false,
+        fill: false
+      }))
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: context => `${context.dataset.label}: ${money(context.parsed.y)}` } }
+      },
+      scales: {
+        x: { grid: { color: 'rgba(100,116,139,.12)' } },
+        y: {
+          beginAtZero: true,
+          grid: { color: 'rgba(100,116,139,.16)' },
+          ticks: { callback: value => `${new Intl.NumberFormat('pl-PL', { maximumFractionDigits: 0 }).format(value)} zł` }
+        }
+      }
+    }
+  });
+  document.querySelectorAll('#annualChartLegend input[data-series-index]').forEach(input => {
+    input.addEventListener('change', () => {
+      const index = Number(input.dataset.seriesIndex);
+      chart.setDatasetVisibility(index, input.checked);
+      chart.update();
+    });
+  });
+})();
+</script>
+{% endif %}
 {% endblock %}
