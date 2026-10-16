@@ -163,3 +163,31 @@ header{background:linear-gradient(90deg,rgba(255,255,255,.94),rgba(20,20,20,.94)
   .annual-chart-legend { grid-template-columns:repeat(2,minmax(0,1fr)); max-height:190px; }
 }
 @media(max-width:420px) { .annual-chart-legend { grid-template-columns:1fr; } .chart-year-form { width:100%; } }
+
+
+/* OPŁATY Dark Premium v18-fix2 — visual layer only */
+:root{color-scheme:dark;--ink:#e8f0ff;--muted:#94a9c4;--line:#263b55;--card:rgba(12,30,51,.92);--green:#10d6a0;--red:#fb7185}
+html{background:#061323;min-height:100%}
+body{color:var(--ink);background:radial-gradient(ellipse at 18% 0%,#102b48 0%,#07172a 42%,#040d19 100%);background-attachment:fixed}
+a{color:#c6d8f0}
+.app-shell{min-height:100vh;display:flex}
+.sidebar{width:228px;flex:0 0 228px;display:flex;flex-direction:column;min-height:100vh;padding:18px 12px;background:rgba(4,17,32,.94);border-right:1px solid #17324e;position:sticky;top:0;height:100vh}
+.brand{color:#f3f7ff;letter-spacing:0;font-size:18px;gap:11px;padding:4px 6px 24px}
+.brand-mark{width:42px;height:42px;border-radius:12px;background:#073e42;color:#16e0b2;box-shadow:none}
+.brand-copy{display:flex;flex-direction:column;gap:3px}.brand-copy b{font-size:17px}.brand-copy small{font-size:9px;letter-spacing:.08em;color:#8aa5c2;font-weight:600}
+.side-nav{display:flex;flex-direction:column;gap:5px}.side-nav a{display:flex;align-items:center;gap:11px;padding:12px 13px;border-radius:10px;color:#a9bed8;font-size:13px;border-left:3px solid transparent}.side-nav a:hover{background:#102940;color:#e7fff8}.side-nav a.active{background:linear-gradient(90deg,#063c40,#092238);border-left-color:#10d6a0;color:#39edc0}
+.side-icon{width:20px;text-align:center;font-size:18px}.sidebar-bottom{margin-top:auto;border-top:1px solid #17324e;padding:18px 5px 4px;display:flex;align-items:center;gap:8px;font-size:11px;color:#d8e6f7}.user-avatar{width:34px;height:34px;border-radius:50%;background:#284765;display:grid;place-items:center;color:white}.user-info{min-width:0;display:flex;flex-direction:column;gap:4px}.user-info b{overflow:hidden;text-overflow:ellipsis}.user-info small{color:#8ca5c0}.logout-link{margin-left:auto;color:#9bb6d1}
+.app-main{flex:1;min-width:0}.wrap{max-width:1440px;padding:22px 24px;margin:0 auto}.app-main main.wrap{min-height:calc(100vh - 68px)}.footer{color:#69839f;border-top:1px solid #19334c;font-size:11px}
+header{background:rgba(5,18,33,.95);border-bottom:1px solid #1a3652;color:#eef6ff}
+.nav nav a{color:#b9cbe1}.nav nav a:hover{background:#102c45}
+h1,h2,h3,h4,strong{color:#edf5ff}.eyebrow{color:#8ba5c2}.muted,.muted *{color:#94a9c4}.back{color:#a8c1dc}
+.hero,.top{align-items:flex-start}.main-title{color:#f0f6ff;text-shadow:none}
+.stat-card,.cardbox,.apartment-card,.section,.glass,.reminder-card,.table-wrap{background:linear-gradient(145deg,rgba(16,39,63,.96),rgba(8,25,44,.96));border:1px solid #1c3d5b;border-radius:13px;box-shadow:0 12px 30px #0003;backdrop-filter:blur(10px)}
+.stat-card span{color:#9bb2cd}.stat-card strong{color:#f0f6ff}.cards{gap:14px}
+.btn{background:#102a43;color:#dcecff;border:1px solid #2a4a67;box-shadow:none;border-radius:10px}.btn:hover{background:#173953}.primary{background:#0bd5a0;color:#03251f;border-color:#0bd5a0}.primary:hover{background:#43e8bb;color:#03251f}.danger-btn{background:#3a1b2b;color:#ff9aae;border-color:#663047}
+input,select,textarea{background:#071a2d!important;color:#e5f0ff!important;border:1px solid #294865!important;border-radius:9px!important}input::placeholder,textarea::placeholder{color:#6f89a5}input:focus,select:focus,textarea:focus{outline:2px solid #10d6a055;border-color:#10d6a0!important}
+label{color:#b6cbe2}table{border-collapse:collapse;color:#d8e7f8}th{color:#91abc8;background:#0c2239}td,th{border-color:#1e3b57!important}tr:hover td{background:#102941}
+.flash{background:#0b3b37;color:#8af5d6;border:1px solid #176c5d;border-radius:10px;padding:12px 15px;margin:10px 0}
+.badge,.status,.pill{border-radius:999px}
+hr{border:0;border-top:1px solid #203b55}
+@media(max-width:850px){.sidebar{width:76px;flex-basis:76px;padding:14px 8px}.brand{justify-content:center;padding:3px 0 20px}.brand-copy,.side-nav a:not(.active){font-size:0}.side-nav a{justify-content:center;padding:12px 4px}.side-nav a .side-icon{font-size:19px}.user-info,.logout-link{display:none}.sidebar-bottom{justify-content:center}.wrap{padding:16px}}
