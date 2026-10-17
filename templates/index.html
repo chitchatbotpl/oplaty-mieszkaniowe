@@ -1,80 +1,48 @@
 {% extends 'base.html' %}
+{% block title %}Panel główny · OPŁATY{% endblock %}
+{% block page_label %}Panel główny{% endblock %}
 {% block content %}
-<div class="hero">
-  <div>
-    <h1 class="main-title">PANEL GŁÓWNY</h1>
-    <p class="muted">Zarządzaj licznikami, opłatami i płatnościami w jednym miejscu.</p>
-  </div>
+<div class="dashboard-heading">
+  <div><div class="eyebrow">PODSUMOWANIE FINANSÓW</div><h1 class="main-title">Panel główny</h1><p class="muted">Stan rozliczeń na {{month[5:7]}}.{{month[0:4]}} — aktualny miesiąc.</p></div>
   <a class="btn primary" href="{{url_for('new_apartment')}}">＋ Dodaj obszar opłat</a>
 </div>
-
-<div class="cards">
-  <div class="stat-card danger-stat"><span>Do zapłaty</span><strong>{{ (totals.total-totals.paid)|money }} zł</strong></div>
-  <div class="stat-card success-stat"><span>Zapłacono</span><strong>{{ totals.paid|money }} zł</strong></div>
-  <div class="stat-card"><span>Wybrany okres</span><strong>{{month[5:7]}}.{{month[0:4]}}</strong></div>
+<div class="dashboard-stats">
+  <div class="stat-card danger-stat"><span><i class="stat-symbol">↗</i> Do zapłaty</span><strong>{{ (totals.total-totals.paid)|money }} zł</strong><small>Bieżący miesiąc</small></div>
+  <div class="stat-card success-stat"><span><i class="stat-symbol">✓</i> Zapłacono</span><strong>{{ totals.paid|money }} zł</strong><small>Bieżący miesiąc</small></div>
+  <div class="stat-card overdue-stat"><span><i class="stat-symbol">◷</i> Zaległości</span><strong>{{ overdue|money }} zł</strong><small>Po terminie płatności</small></div>
+  <div class="stat-card annual-stat"><span><i class="stat-symbol">▥</i> Łącznie w roku</span><strong>{{ annual_total|money }} zł</strong><small>Od stycznia do grudnia {{month[:4]}}</small></div>
 </div>
-
-<form class="month glass" method="get" onsubmit="syncMonth()">
-  <div class="month-picker-group">
-    <span class="month-picker-label">Rok i miesiąc</span>
-    <div class="month-selects">
-      <select class="month-picker" id="month-year" aria-label="Wybierz rok">
-        {% for y in range(2020, 2036) %}
-          <option value="{{y}}" {% if month[0:4]|int == y %}selected{% endif %}>{{y}}</option>
-        {% endfor %}
-      </select>
-      <select class="month-picker" id="month-month" aria-label="Wybierz miesiąc">
-        {% for m, name in [('01','Styczeń'),('02','Luty'),('03','Marzec'),('04','Kwiecień'),('05','Maj'),('06','Czerwiec'),('07','Lipiec'),('08','Sierpień'),('09','Wrzesień'),('10','Październik'),('11','Listopad'),('12','Grudzień')] %}
-          <option value="{{m}}" {% if month[5:7] == m %}selected{% endif %}>{{name}}</option>
-        {% endfor %}
-      </select>
+<div class="dashboard-layout">
+  <section class="dashboard-main" id="obszary-oplat">
+    <div class="section-heading-row"><div><h2>Obszary opłat</h2><p class="muted">Podsumowanie sekcji za {{month[5:7]}}.{{month[0:4]}}</p></div><span class="count-pill">{{apartments|length}} obszarów</span></div>
+    <div class="dashboard-apartments">
+    {% for a in apartments %}
+      <article class="dashboard-apartment">
+        <a class="dashboard-apartment-title" href="{{url_for('apartment_detail',apartment_id=a.id,month=month)}}"><span class="dashboard-home-icon">⌂</span><span><b>{{a.name}}</b><small>{{a.address or 'Brak adresu'}} · {{a.section_count}} sekcji</small></span><span class="arrow">↗</span></a>
+        {% if a.sections %}
+        <div class="dashboard-section-list">
+          {% for sec in a.sections %}
+          {% set settled = sec.paid_status or sec.no_payment_status %}
+          <div class="dashboard-section-row {{'is-paid' if settled else 'is-unpaid'}}">
+            <span class="dashboard-status {{'status-ok' if settled else 'status-no'}}">{{'✓' if settled else '×'}}</span>
+            <span class="dashboard-section-name"><b>{{sec.name}}</b>{% if sec.no_payment_status %}<small>Brak płatności w tym miesiącu</small>{% elif not sec.reading_count %}<small>Czeka na odczyt</small>{% elif settled %}<small>Opłacono</small>{% else %}<small>Do zapłaty</small>{% endif %}</span>
+            <span class="dashboard-amount"><small>Zapłacono</small><b>{{sec.paid|money}} zł</b></span>
+            <span class="dashboard-amount due-amount"><small>Do zapłaty</small><b>{{(sec.total-sec.paid)|money}} zł</b></span>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="dashboard-area-totals"><div><small>Łącznie zapłacono</small><b class="money-good">{{a.sections|sum(attribute='paid')|money}} zł</b></div><div><small>Łącznie do zapłaty</small><b class="money-bad">{{(a.sections|sum(attribute='total') - a.sections|sum(attribute='paid'))|money}} zł</b></div></div>
+        {% else %}<div class="empty small">Brak sekcji w tym obszarze.</div>{% endif %}
+        <div class="dashboard-card-footer"><a href="{{url_for('apartment_detail',apartment_id=a.id,month=month)}}">Otwórz obszar <span>→</span></a><a href="{{url_for('edit_apartment',apartment_id=a.id)}}">Edytuj</a></div>
+      </article>
+    {% else %}<div class="empty">Nie masz jeszcze żadnych obszarów opłat. Dodaj pierwszy, aby rozpocząć.</div>{% endfor %}
     </div>
-  </div>
-  <input type="hidden" name="month" id="selected-month" value="{{month}}">
-  <button class="btn" type="submit">Pokaż</button>
-</form>
-<script>
-function syncMonth() {
-  document.getElementById('selected-month').value = document.getElementById('month-year').value + '-' + document.getElementById('month-month').value;
-}
-</script>
-
-<div class="grid">
-{% for a in apartments %}
-  <div class="apartment-card">
-    <a class="apartment-main" href="{{url_for('apartment_detail',apartment_id=a.id,month=month)}}">
-      <div class="apt-icon">⌂</div>
-      <div class="apt-title">{{a.name}}</div>
-      <div>{{a.address or 'Brak adresu'}}</div>
-      <div class="muted">Sekcje: {{a.section_count}}</div>
-      <span class="open">Otwórz →</span>
-    </a>
-    {% if a.sections %}
-    <div class="section-totals">
-      <div class="section-totals-title">Rozliczenie sekcji · {{month[5:7]}}.{{month[0:4]}}</div>
-      {% for sec in a.sections %}
-      <div class="section-total-row {{ 'section-paid' if (sec.paid_status or sec.no_payment_status) else 'section-unpaid' }}">
-        <span class="section-total-name"><span class="section-status {{ 'status-paid' if (sec.paid_status or sec.no_payment_status) else 'status-unpaid' }}" aria-label="{{ 'Opłacone' if (sec.paid_status or sec.no_payment_status) else 'Nieopłacone' }}">{{ '✓' if (sec.paid_status or sec.no_payment_status) else '✕' }}</span>{{sec.name}}</span>
-        <span class="section-total-value due-value"><small>Do zapłaty</small><b>{{(sec.total-sec.paid)|money}} zł</b></span>
-        <span class="section-total-value paid-value"><small>Zapłacono</small><b>{{sec.paid|money}} zł</b></span>
-      </div>
-      {% endfor %}
-      <div class="section-total-row section-grand-total">
-        <span class="section-total-name">SUMA</span>
-        <span class="section-total-value due-value"><small>Do zapłaty</small><b>{{(a.sections|sum(attribute='total') - a.sections|sum(attribute='paid'))|money}} zł</b></span>
-        <span class="section-total-value paid-value"><small>Zapłacono</small><b>{{a.sections|sum(attribute='paid')|money}} zł</b></span>
-      </div>
-    </div>
-    {% endif %}
-    <div class="apartment-actions">
-      <a href="{{url_for('edit_apartment',apartment_id=a.id)}}">✎ Edytuj</a>
-      <form method="post" action="{{url_for('delete_apartment',apartment_id=a.id)}}" onsubmit="return confirm('Usunąć obszar opłat {{a.name}}? Zostaną usunięte także jego sekcje i odczyty. Tej operacji nie można cofnąć.')">
-        <button class="danger-link" type="submit">🗑 Usuń obszar opłat</button>
-      </form>
-    </div>
-  </div>
-{% else %}
-  <div class="empty">Brak mieszkań.</div>
-{% endfor %}
+  </section>
+  <aside class="quick-panel"><div class="quick-panel-heading"><span class="quick-icon">✦</span><div><h2>Szybki dostęp</h2><p class="muted">Najczęstsze czynności</p></div></div>
+    <a class="quick-action" href="{{url_for('index')}}#obszary-oplat"><span class="quick-action-icon">◉</span><span><b>Dodaj odczyt</b><small>Przejdź do sekcji mediów</small></span><span class="arrow">→</span></a>
+    {% if apartments %}<a class="quick-action" href="{{url_for('apartment_detail',apartment_id=apartments[0].id,month=month)}}"><span class="quick-action-icon">＋</span><span><b>Nowa płatność</b><small>Otwórz rozliczenia obszaru</small></span><span class="arrow">→</span></a>{% else %}<a class="quick-action" href="{{url_for('new_apartment')}}"><span class="quick-action-icon">＋</span><span><b>Nowa płatność</b><small>Najpierw dodaj obszar</small></span><span class="arrow">→</span></a>{% endif %}
+    <a class="quick-action" href="{{url_for('reports')}}"><span class="quick-action-icon">▤</span><span><b>Generuj raport</b><small>Historia i zestawienia</small></span><span class="arrow">→</span></a>
+    <div class="quick-panel-note"><span class="note-dot"></span><span><b>Wszystko pod kontrolą</b><small>Kwoty i statusy pobierane są z Twojej bazy danych.</small></span></div>
+  </aside>
 </div>
 {% endblock %}

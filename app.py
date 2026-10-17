@@ -485,6 +485,17 @@ def index():
                COALESCE(SUM(CASE WHEN r.paid=1 AND r.no_payment=0 THEN r.amount_due ELSE 0 END),0) paid
         FROM readings r WHERE r.period=?
     ''', (month,)).fetchone()
+    current_day = now_local().strftime('%Y-%m-%d')
+    overdue = db_execute(con, '''
+        SELECT COALESCE(SUM(r.amount_due),0) AS total
+        FROM readings r
+        WHERE r.paid=0 AND r.no_payment=0 AND r.amount_due>0
+          AND r.payment_due_date IS NOT NULL AND CAST(r.payment_due_date AS TEXT) < ?
+    ''', (current_day,)).fetchone()['total']
+    annual_total = db_execute(con, '''
+        SELECT COALESCE(SUM(CASE WHEN no_payment=0 THEN amount_due ELSE 0 END),0) AS total
+        FROM readings WHERE period>=? AND period<=?
+    ''', (f'{month[:4]}-01', f'{month[:4]}-12')).fetchone()['total']
     apartments = []
     for a in apartment_rows:
         sections = db_execute(con, '''
@@ -503,7 +514,7 @@ def index():
         apartments.append({'id': a['id'], 'name': a['name'], 'address': a['address'],
                            'section_count': a['section_count'], 'sections': sections})
     con.close()
-    return render_template('index.html', apartments=apartments, month=month, totals=totals)
+    return render_template('index.html', apartments=apartments, month=month, totals=totals, overdue=overdue, annual_total=annual_total)
 
 
 @app.route('/apartments')

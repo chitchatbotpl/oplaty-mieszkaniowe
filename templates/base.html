@@ -12,10 +12,12 @@
     <a class="brand" href="{{ url_for('index') }}"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3.5 10.5 12 3l8.5 7.5V20a1 1 0 0 1-1 1h-5v-5h-5v5h-5a1 1 0 0 1-1-1v-9.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M2.8 10.8 12 2.7l9.2 8.1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>OPŁATY</span></a>
     <div class="sidebar-label">MENU GŁÓWNE</div>
     <nav class="side-nav">
-      <a href="{{ url_for('index') }}"><span class="nav-icon">▦</span><span>Panel główny</span></a>
-      <a href="{{ url_for('reports') }}"><span class="nav-icon">▤</span><span>Raporty</span></a>
-      {% if current_user_email %}<a href="{{ url_for('reminders') }}"><span class="nav-icon">◷</span><span>Przypomnienia</span></a>{% endif %}
-      {% if current_user_role == 'admin' %}<a href="{{ url_for('users') }}"><span class="nav-icon">♙</span><span>Użytkownicy</span></a>{% endif %}
+      <a class="{{ 'active' if request.endpoint == 'index' else '' }}" href="{{ url_for('index') }}"><span class="nav-icon">▦</span><span>Panel główny</span></a>
+      <a class="{{ 'active' if request.endpoint in ['apartments','new_apartment','apartment_detail','edit_apartment'] else '' }}" href="{{ url_for('apartments') }}"><span class="nav-icon">⌂</span><span>Obszary opłat</span></a>
+      <a class="{{ 'active' if request.endpoint == 'reports' else '' }}" href="{{ url_for('reports') }}"><span class="nav-icon">▤</span><span>Historia płatności</span></a>
+      <a class="{{ 'active' if request.endpoint in ['new_reading','edit_reading'] else '' }}" href="{{ url_for('index') }}#obszary-oplat"><span class="nav-icon">◉</span><span>Odczyty mediów</span></a>
+      {% if current_user_email %}<a class="{{ 'active' if request.endpoint == 'reminders' else '' }}" href="{{ url_for('reminders') }}"><span class="nav-icon">◷</span><span>Przypomnienia</span></a>{% endif %}
+      <a class="{{ 'active' if request.endpoint in ['users'] else '' }}" href="{{ url_for('users') if current_user_role == 'admin' else url_for('reminders') }}"><span class="nav-icon">⚙</span><span>Ustawienia</span></a>
     </nav>
     <div class="sidebar-bottom">
       <div class="sidebar-label">KONTO</div>
