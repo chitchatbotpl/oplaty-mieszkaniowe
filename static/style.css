@@ -51,3 +51,33 @@ body{background:var(--dash-bg)!important;color:var(--dash-text)!important}
 .system-note strong{color:#6ee7b7;font-weight:800}
 @media(max-width:900px){.topbar{height:auto;min-height:72px;padding:14px 20px;align-items:flex-start}.topbar-right{max-width:60%;align-items:flex-start}.system-note{max-width:360px}}
 @media(max-width:700px){.dashboard-heading-actions{width:100%;justify-content:stretch}.period-picker{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto}.period-picker label{grid-column:1 / -1}.period-picker input{width:100%}.dashboard-heading-actions>.btn{width:100%}.topbar{flex-direction:column;gap:8px}.topbar-right{max-width:100%;justify-content:flex-start}.system-note{max-width:none}.dashboard-area-totals{gap:10px}.dashboard-area-totals>div{align-items:flex-end}}
+
+
+/* Poprawki UI v3.2 */
+/* Suma obszaru: dwie wyraźne kolumny, obie wyrównane do prawej krawędzi */
+.dashboard-area-totals{display:flex!important;justify-content:flex-end!important;align-items:stretch!important;gap:clamp(22px,4vw,64px)!important}
+.dashboard-area-totals>div{flex:0 0 auto!important;min-width:150px!important;align-items:flex-end!important;text-align:right!important;justify-self:auto!important}
+.dashboard-area-totals>div small,.dashboard-area-totals>div b{display:block;width:100%;text-align:right!important}
+@media(max-width:560px){.dashboard-area-totals{gap:14px!important}.dashboard-area-totals>div{min-width:0!important;flex:1 1 0!important}}
+/* Status aplikacji jako kompaktowy, kolorowy przycisk informacyjny */
+.topbar-right{max-width:72%;display:flex;align-items:center;justify-content:flex-end}
+.system-status{display:flex;align-items:center;gap:10px;max-width:100%;padding:8px 12px;border:1px solid;border-radius:10px;transition:background .2s,border-color .2s;color:#dce8f5}
+.system-status.is-healthy{background:#102d2b;border-color:#24584c}
+.system-status.is-down{background:#351f2b;border-color:#713647}
+.system-status .online-dot{flex:0 0 7px;margin-top:1px}
+.system-status.is-down .online-dot{background:#fb7185;box-shadow:0 0 12px #fb718555}
+.system-status-copy{display:flex;flex-direction:column;gap:3px;min-width:0}
+.system-status-copy>b{font-size:11px;line-height:1.2;color:#8ef0cf}
+.system-status.is-down .system-status-copy>b{color:#ff9eac}
+.system-status .system-note{display:block;font-size:10px;line-height:1.4;color:#a3b7c9}
+.system-status .system-note strong{color:#6ee7b7}
+.system-status.is-down .system-note strong{color:#ff9eac}
+@media(max-width:700px){.topbar-right{max-width:100%;width:100%;justify-content:flex-start}.system-status{width:100%;align-items:flex-start}.system-status-copy{flex:1}}
+/* Akcje sekcji w stylu przycisku „Dodaj sekcję” */
+.section-head .actions{gap:8px}
+.section-head .actions form{margin:0}
+.section-head .section-edit-btn{background:#202d40!important;border-color:#3a4a60!important;color:#d5deea!important;text-decoration:none!important}
+.section-head .section-edit-btn:hover{background:#29394e!important;border-color:#50627a!important}
+.section-head .section-delete-btn{background:#3b222e!important;border-color:#633446!important;color:#ff9cab!important}
+.section-head .section-delete-btn:hover{background:#4a2937!important;border-color:#814153!important}
+.section-head .section-edit-btn,.section-head .section-delete-btn{min-height:38px;padding:9px 14px;border-radius:9px!important;font-size:12px;font-weight:750}
